@@ -35,14 +35,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE src)
 
 target_link_libraries(${PROJECT_NAME}
   vita2d
-  SceFont_stub
   SceDisplay_stub
-  sceFontDoneLib
   SceCtrl_stub
-  sceFontGetCharInfo
   SceTouch_stub
   SceSysmodule_stub
-  sceFontGetCharGlyphImage
   SceGxm_stub
   SceCommonDialog_stub
   SceAppMgr_stub
