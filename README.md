@@ -155,6 +155,7 @@ Build a practical, installable VPK browser for PS Vita (3.60/3.65 homebrew), wit
 ### Required structure (high level)
 - `eboot.bin`
 - `sce_sys/param.sfo`
+- `sce_sys/pic0.png`
 - `sce_sys/icon0.png`
 - `sce_sys/livearea/contents/*` (LiveArea assets/templates)
 - App resources (fonts, certs, default config) in predictable internal paths
