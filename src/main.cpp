@@ -19,11 +19,10 @@ int main() {
     while (running) {
         input.poll();
 
-        if (input.pressed(platform::vita::Button::Start)) {
+        shell.handle_input(input);
+        if (shell.should_exit()) {
             running = false;
         }
-
-        shell.handle_input(input);
 
         vita2d_start_drawing();
         vita2d_clear_screen();

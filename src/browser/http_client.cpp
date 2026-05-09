@@ -75,6 +75,10 @@ std::string normalize_url(const std::string& url) {
     if (starts_with_http(url)) return url;
     return std::string("https://") + url;
 }
+
+bool is_https_url(const std::string& url) {
+    return url.rfind("https://", 0) == 0;
+}
 } // namespace
 #endif
 
@@ -117,6 +121,7 @@ HttpResponse HttpClient::get(const std::string& raw_url, int timeout_ms, std::si
     int conn = sceHttpCreateConnectionWithURL(tmpl, url.c_str(), 0);
     if (conn < 0) {
         sceHttpDeleteTemplate(tmpl);
+        if (is_https_url(url)) out.cert_error = true;
         out.error = "failed to create HTTP connection";
         return out;
     }
@@ -133,7 +138,12 @@ HttpResponse HttpClient::get(const std::string& raw_url, int timeout_ms, std::si
         sceHttpDeleteRequest(req);
         sceHttpDeleteConnection(conn);
         sceHttpDeleteTemplate(tmpl);
-        out.error = "request send failed";
+        if (is_https_url(url)) {
+            out.cert_error = true;
+            out.error = "TLS/certificate validation failed";
+        } else {
+            out.error = "request send failed";
+        }
         return out;
     }
 

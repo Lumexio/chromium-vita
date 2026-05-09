@@ -14,6 +14,7 @@ Input::Input() {
 
 void Input::poll() {
     m_prev = m_curr;
+    m_prev_touch = m_touch;
     sceCtrlReadBufferPositive(0, &m_curr, 1);
     sceTouchRead(SCE_TOUCH_PORT_FRONT, &m_touch, 1);
 }
@@ -42,6 +43,22 @@ TouchPoint Input::touch_point(int idx) const {
         static_cast<float>(m_touch.report[idx].x) * TOUCH_SCALE,
         static_cast<float>(m_touch.report[idx].y) * TOUCH_SCALE,
     };
+}
+
+TouchPoint Input::previous_touch_point(int idx) const {
+    if (idx < 0 || idx >= static_cast<int>(m_prev_touch.reportNum)) return {0.0f, 0.0f};
+    return {
+        static_cast<float>(m_prev_touch.report[idx].x) * TOUCH_SCALE,
+        static_cast<float>(m_prev_touch.report[idx].y) * TOUCH_SCALE,
+    };
+}
+
+bool Input::touch_pressed() const {
+    return m_prev_touch.reportNum == 0 && m_touch.reportNum > 0;
+}
+
+bool Input::touch_released() const {
+    return m_prev_touch.reportNum > 0 && m_touch.reportNum == 0;
 }
 
 float Input::left_stick_x()  const { return (static_cast<float>(m_curr.lx) - 128.0f) * AXIS_SCALE; }

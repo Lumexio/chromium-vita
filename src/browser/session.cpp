@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 
@@ -65,14 +66,18 @@ bool Session::go_back() {
     if (!can_go_back()) return false;
     --m_history_index;
     m_current_url = m_history[m_history_index];
-    return fetch_into_current(m_current_url);
+    const bool ok = fetch_into_current(m_current_url);
+    save_storage();
+    return ok;
 }
 
 bool Session::go_forward() {
     if (!can_go_forward()) return false;
     ++m_history_index;
     m_current_url = m_history[m_history_index];
-    return fetch_into_current(m_current_url);
+    const bool ok = fetch_into_current(m_current_url);
+    save_storage();
+    return ok;
 }
 
 void Session::go_home() {
@@ -107,13 +112,14 @@ bool Session::fetch_into_current(const std::string& url) {
     HttpResponse resp = m_http.get(url, 8000, MAX_PAGE_BYTES);
     if (!resp.ok) {
         m_state = LoadState::Error;
-        m_title = "Load error";
+        m_title = resp.cert_error ? "Certificate error" : "Load error";
         m_page_lines = {
             "Unable to load page.",
             "",
             resp.error.empty() ? "Unknown network error" : resp.error,
             "",
-            "Press Circle for back or Select to edit URL.",
+            resp.cert_error ? "Check system date/cert trust and try another site."
+                            : "Press Circle for back or Select to edit URL.",
         };
         m_status = "Error: " + (resp.error.empty() ? std::string("network failure") : resp.error);
         return false;
@@ -167,6 +173,9 @@ void Session::load_storage() {
 void Session::save_storage() const {
 #ifdef __vita__
     sceIoMkdir(storage_dir().c_str(), 0777);
+#else
+    std::error_code ec;
+    std::filesystem::create_directories(storage_dir(), ec);
 #endif
 
     {
@@ -284,6 +293,10 @@ std::string Session::extract_title(const std::string& html) const {
 std::string Session::normalize_url(const std::string& raw_url) const {
     std::string url = trim(raw_url);
     if (url.empty()) return {};
+    if (url.find(' ') != std::string::npos) {
+        std::replace(url.begin(), url.end(), ' ', '+');
+        return "https://duckduckgo.com/?q=" + url;
+    }
     if (starts_with_http(url)) return url;
     return std::string("https://") + url;
 }

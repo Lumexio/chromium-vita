@@ -8,6 +8,7 @@ namespace browser {
 struct HttpResponse {
     bool        ok{false};
     int         status_code{0};
+    bool        cert_error{false};
     std::string body;
     std::string error;
 };

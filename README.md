@@ -214,6 +214,16 @@ Build a practical, installable VPK browser for PS Vita (3.60/3.65 homebrew), wit
 - Run host-side unit tests for tooling scripts:
   - `python3 -m unittest discover -s tests -v`
 
+## Current in-app controls (milestone shell)
+
+- D-pad / left stick: focus navigation and viewport scrolling
+- `X`: activate focused control
+- `O`: back navigation
+- `L` / `R`: fast page scroll
+- `START`: toggle menu/bookmark action
+- `SELECT`: exit app
+- Touch: tap controls / drag viewport
+
 ---
 
 ## Suggested default project context
