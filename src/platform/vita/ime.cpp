@@ -6,6 +6,7 @@
 #ifdef __vita__
 #include <psp2/common_dialog.h>
 #include <psp2/ime_dialog.h>
+#include <psp2/kernel/threadmgr.h>
 #endif
 
 namespace platform::vita {
@@ -178,6 +179,7 @@ bool Ime::prompt_url(const std::string& title, const std::string& initial_text, 
     }
 
     while (sceImeDialogGetStatus() == SCE_COMMON_DIALOG_STATUS_RUNNING) {
+        sceKernelDelayThread(16 * 1000);
     }
 
     bool accepted = false;
