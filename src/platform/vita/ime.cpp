@@ -184,6 +184,7 @@ bool Ime::prompt_url(const std::string& title, const std::string& initial_text, 
     if (sceImeDialogGetStatus() == SCE_COMMON_DIALOG_STATUS_FINISHED) {
         SceImeDialogResult result{};
         if (sceImeDialogGetResult(&result) >= 0 && result.button == SCE_IME_DIALOG_BUTTON_ENTER) {
+            buffer[MAX_TEXT] = 0;
             out_text = to_utf8(buffer.data());
             accepted = !out_text.empty();
         }
