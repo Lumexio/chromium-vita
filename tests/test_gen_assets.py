@@ -31,9 +31,10 @@ class TestMakePng(unittest.TestCase):
         self.assertTrue(data.startswith(PNG_SIGNATURE))
 
         chunks = _read_chunks(data)
-        self.assertGreaterEqual(len(chunks), 3)
+        self.assertGreaterEqual(len(chunks), 4)
         self.assertEqual(chunks[0][0], b"IHDR")
-        self.assertEqual(chunks[1][0], b"IDAT")
+        self.assertEqual(chunks[1][0], b"PLTE")
+        self.assertEqual(chunks[2][0], b"IDAT")
         self.assertEqual(chunks[-1][0], b"IEND")
 
         ihdr = chunks[0][1]
@@ -41,20 +42,21 @@ class TestMakePng(unittest.TestCase):
         self.assertEqual(width, 4)
         self.assertEqual(height, 3)
         self.assertEqual(bit_depth, 8)
-        self.assertEqual(color_type, 2)
+        self.assertEqual(color_type, 3)
         self.assertEqual(comp, 0)
         self.assertEqual(filt, 0)
         self.assertEqual(interlace, 0)
+        self.assertEqual(chunks[1][1], bytes([0x11, 0x22, 0x33]))
 
-    def test_make_png_encodes_solid_rgb_rows(self):
+    def test_make_png_encodes_solid_palette_rows(self):
         width, height = 3, 2
         color = (0xAA, 0xBB, 0xCC)
         data = gen_assets._make_png(width, height, *color)
         chunks = _read_chunks(data)
-        idat = chunks[1][1]
+        idat = chunks[2][1]
         raw = zlib.decompress(idat)
 
-        expected_row = b"\x00" + bytes(color) * width
+        expected_row = b"\x00" + b"\x00" * width
         self.assertEqual(raw, expected_row * height)
 
 

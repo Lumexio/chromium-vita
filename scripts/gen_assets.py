@@ -15,22 +15,24 @@ import zlib
 
 
 def _make_png(width: int, height: int, r: int, g: int, b: int) -> bytes:
-    """Return raw bytes of a valid solid-colour RGB PNG."""
+    """Return raw bytes of a valid solid-colour indexed-colour PNG."""
     def _chunk(tag: bytes, data: bytes) -> bytes:
         size = struct.pack(">I", len(data))
         crc  = struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
         return size + tag + data + crc
 
     signature = b"\x89PNG\r\n\x1a\n"
-    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    # Palette PNG (colour type 3) is more Vita LiveArea-friendly than truecolour.
+    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 3, 0, 0, 0)
     ihdr      = _chunk(b"IHDR", ihdr_data)
+    plte      = _chunk(b"PLTE", bytes([r, g, b]))
 
-    # Build raw scanlines: filter byte 0x00 then RGB triples
-    row   = b"\x00" + bytes([r, g, b]) * width
+    # Build raw scanlines: filter byte 0x00 then one-byte palette indices.
+    row   = b"\x00" + b"\x00" * width
     idat  = _chunk(b"IDAT", zlib.compress(row * height, level=9))
     iend  = _chunk(b"IEND", b"")
 
-    return signature + ihdr + idat + iend
+    return signature + ihdr + plte + idat + iend
 
 
 # (output_path, width, height, R, G, B)
