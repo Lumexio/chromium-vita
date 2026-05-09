@@ -162,7 +162,10 @@ bool Session::push_history_and_load(const std::string& url) {
     }
 
     if (!m_history.empty() && m_history_index + 1 < m_history.size()) {
-        m_history.erase(m_history.begin() + static_cast<long>(m_history_index + 1), m_history.end());
+        m_history.erase(
+            m_history.begin() +
+                static_cast<std::vector<std::string>::difference_type>(m_history_index + 1),
+            m_history.end());
     }
 
     append_limited(m_history, url, MAX_HISTORY);
