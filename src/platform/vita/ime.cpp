@@ -179,6 +179,7 @@ bool Ime::prompt_url(const std::string& title, const std::string& initial_text, 
     }
 
     while (sceImeDialogGetStatus() == SCE_COMMON_DIALOG_STATUS_RUNNING) {
+        // Yield ~1 frame to avoid busy-waiting while the dialog is active.
         sceKernelDelayThread(16 * 1000);
     }
 
