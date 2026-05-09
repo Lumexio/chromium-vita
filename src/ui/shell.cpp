@@ -40,6 +40,12 @@ static constexpr int URL_H = 44;
 
 static constexpr float CURSOR_R = 6.0f;
 static constexpr float STICK_DEADZONE = 0.35f;
+static constexpr float STICK_FOCUS_THRESHOLD = 0.85f;
+static constexpr float STICK_SCROLL_SPEED = 2.5f;
+static constexpr float STICK_CURSOR_SPEED = 4.0f;
+static constexpr float TOUCH_SCROLL_FACTOR = 12.0f;
+static constexpr int VIEW_PADDING_TOP = 20;
+static constexpr int VIEW_LINE_HEIGHT = 18;
 
 struct Rect {
     int x;
@@ -108,11 +114,8 @@ void Shell::move_focus(int direction) {
 void Shell::open_url_ime() {
     std::string entered;
     if (m_ime.prompt_url("Open URL", m_session.current_url(), entered)) {
-        if (!m_session.navigate(entered)) {
-            m_scroll_line = 0;
-        } else {
-            m_scroll_line = 0;
-        }
+        m_session.navigate(entered);
+        m_scroll_line = 0;
     }
 }
 
@@ -181,7 +184,7 @@ void Shell::handle_touch(const platform::vita::Input& input) {
         const auto prev = input.previous_touch_point(0);
         if (prev.y != 0.0f) {
             const float dy = point.y - prev.y;
-            m_scroll_line = std::max(0, m_scroll_line - static_cast<int>(dy / 12.0f));
+            m_scroll_line = std::max(0, m_scroll_line - static_cast<int>(dy / TOUCH_SCROLL_FACTOR));
         }
     }
 }
@@ -215,10 +218,10 @@ void Shell::handle_input(const platform::vita::Input& input) {
     const float lx = input.left_stick_x();
     const float ly = input.left_stick_y();
 
-    if (input.pressed(platform::vita::Button::Left) || lx < -0.85f) {
+    if (input.pressed(platform::vita::Button::Left) || lx < -STICK_FOCUS_THRESHOLD) {
         move_focus(-1);
     }
-    if (input.pressed(platform::vita::Button::Right) || lx > 0.85f) {
+    if (input.pressed(platform::vita::Button::Right) || lx > STICK_FOCUS_THRESHOLD) {
         move_focus(+1);
     }
 
@@ -230,7 +233,7 @@ void Shell::handle_input(const platform::vita::Input& input) {
             m_scroll_line += 1;
         }
         if (std::fabs(ly) > STICK_DEADZONE) {
-            m_scroll_line = std::max(0, m_scroll_line + static_cast<int>(ly * 2.5f));
+            m_scroll_line = std::max(0, m_scroll_line + static_cast<int>(ly * STICK_SCROLL_SPEED));
         }
     } else {
         if (input.pressed(platform::vita::Button::Up)) move_focus(-1);
@@ -238,13 +241,13 @@ void Shell::handle_input(const platform::vita::Input& input) {
     }
 
     if (std::fabs(lx) > STICK_DEADZONE || std::fabs(ly) > STICK_DEADZONE) {
-        m_cursor_x = std::clamp(m_cursor_x + (lx * 4.0f), 0.0f, static_cast<float>(SCR_W - 1));
-        m_cursor_y = std::clamp(m_cursor_y + (ly * 4.0f), 0.0f, static_cast<float>(SCR_H - 1));
+        m_cursor_x = std::clamp(m_cursor_x + (lx * STICK_CURSOR_SPEED), 0.0f, static_cast<float>(SCR_W - 1));
+        m_cursor_y = std::clamp(m_cursor_y + (ly * STICK_CURSOR_SPEED), 0.0f, static_cast<float>(SCR_H - 1));
     }
 
     handle_touch(input);
 
-    const int visible_lines = (VIEW_H - 20) / 18;
+    const int visible_lines = (VIEW_H - VIEW_PADDING_TOP) / VIEW_LINE_HEIGHT;
     const int max_scroll = std::max(0, static_cast<int>(m_session.page_lines().size()) - visible_lines);
     m_scroll_line = std::clamp(m_scroll_line, 0, max_scroll);
 }
@@ -289,9 +292,9 @@ void Shell::render() const {
 
     if (m_font) {
         const auto& lines = m_session.page_lines();
-        const int base_y = VIEW_Y + 20;
-        const int line_h = 18;
-        const int visible_lines = (VIEW_H - 20) / line_h;
+        const int base_y = VIEW_Y + VIEW_PADDING_TOP;
+        const int line_h = VIEW_LINE_HEIGHT;
+        const int visible_lines = (VIEW_H - VIEW_PADDING_TOP) / line_h;
 
         for (int i = 0; i < visible_lines; ++i) {
             const int idx = m_scroll_line + i;
