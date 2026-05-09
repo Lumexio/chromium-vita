@@ -5,7 +5,7 @@
 #include <string>
 
 #ifdef __vita__
-#include <psp2/http.h>
+#include <psp2/net/http.h>
 #include <psp2/net/net.h>
 #include <psp2/net/netctl.h>
 #include <psp2/ssl.h>
