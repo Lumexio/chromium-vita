@@ -76,6 +76,31 @@ Build a practical, installable VPK browser for PS Vita (3.60/3.65 homebrew), wit
   - Disable non-essential optional features
 - Gate expensive features behind compile flags.
 
+### Build and run locally (same as CI)
+1. Install prerequisites:
+   - VitaSDK (and set `VITASDK`)
+   - `cmake`
+   - `ninja`
+   - `python3`
+
+2. From the repository root:
+   ```bash
+   cd /home/runner/work/chromium-vita/chromium-vita
+   python3 scripts/gen_assets.py
+   cmake -B build \
+     -DCMAKE_BUILD_TYPE=Release \
+     -DCMAKE_TOOLCHAIN_FILE="$VITASDK/share/vita.toolchain.cmake" \
+     -G Ninja
+   cmake --build build --parallel
+   ```
+
+3. Generated installable package:
+   ```bash
+   /home/runner/work/chromium-vita/chromium-vita/build/chromium-vita.vpk
+   ```
+
+4. Copy the `.vpk` to your Vita (VitaShell USB/FTP) and install it from VitaShell.
+
 ---
 
 ## 4) Porting strategy (milestones)
