@@ -49,6 +49,7 @@ static constexpr int VIEW_LINE_HEIGHT = 18;
 static constexpr std::size_t URL_DISPLAY_MAX_CHARS = 76;
 static constexpr std::size_t TITLE_DISPLAY_MAX_CHARS = 46;
 static constexpr std::size_t STATUS_DISPLAY_MAX_CHARS = 52;
+static constexpr std::array<const char*, 4> BUTTON_LABELS = {"<", ">", "Reload", "Home"};
 
 struct Rect {
     int x;
@@ -269,14 +270,13 @@ void Shell::render() const {
 
     vita2d_draw_rectangle(0, 0, SCR_W, TOP_H, C_TOPBAR);
 
-    static constexpr std::array<const char*, 4> button_labels = {"<", ">", "Reload", "Home"};
     for (int i = 0; i < 4; ++i) {
         const Rect r = button_rect(i);
         vita2d_draw_rectangle(r.x, r.y, r.w, r.h, C_BUTTON);
         draw_border(r, focused_index() == i ? C_FOCUS : C_BORDER);
 
         if (m_font) {
-            vita2d_pgf_draw_text(m_font, r.x + 10, r.y + 26, C_TEXT, 0.85f, button_labels[i]);
+            vita2d_pgf_draw_text(m_font, r.x + 10, r.y + 26, C_TEXT, 0.85f, BUTTON_LABELS[i]);
         }
     }
 
@@ -312,7 +312,7 @@ void Shell::render() const {
         const std::string title = fit_text(m_session.display_title(), TITLE_DISPLAY_MAX_CHARS);
         const std::string status = fit_text(m_menu_open ? m_menu_status : m_session.status_message(), STATUS_DISPLAY_MAX_CHARS);
         vita2d_pgf_draw_text(m_font, 8, SCR_H - 16, C_TEXT_DIM, 0.62f,
-                             "DPad/LStick Focus+Scroll  X Select  O Back  L/R Pg  Start Menu  Select Exit");
+                             "DPad/LStick Focus+Scroll  X Select  O Back  L/R Pg  START Menu  SELECT Exit");
         vita2d_pgf_draw_text(m_font, 8, SCR_H - BOT_H + 14, C_TEXT, 0.7f, title.c_str());
         vita2d_pgf_draw_text(m_font, SCR_W / 2, SCR_H - BOT_H + 14, C_TEXT_DIM, 0.7f, status.c_str());
     }

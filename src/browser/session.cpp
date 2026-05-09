@@ -196,10 +196,11 @@ void Session::save_storage() const {
     sceIoMkdir(storage_dir().c_str(), 0777);
 #else
     std::error_code ec;
-    std::filesystem::create_directories(storage_dir(), ec);
+    const std::string dir = storage_dir();
+    std::filesystem::create_directories(dir, ec);
     if (ec) {
         std::fprintf(stderr, "failed to create storage dir '%s': %s\n",
-                     storage_dir().c_str(), ec.message().c_str());
+                     dir.c_str(), ec.message().c_str());
     }
 #endif
 
