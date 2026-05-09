@@ -34,6 +34,26 @@ void append_limited(std::vector<std::string>& out, const std::string& value, std
         out.erase(out.begin());
     }
 }
+
+std::string encode_query_component(const std::string& input) {
+    static constexpr char HEX[] = "0123456789ABCDEF";
+    std::string output;
+    output.reserve(input.size() * 3);
+
+    for (unsigned char ch : input) {
+        if (std::isalnum(ch) || ch == '-' || ch == '_' || ch == '.' || ch == '~') {
+            output.push_back(static_cast<char>(ch));
+        } else if (ch == ' ') {
+            output.push_back('+');
+        } else {
+            output.push_back('%');
+            output.push_back(HEX[(ch >> 4) & 0x0F]);
+            output.push_back(HEX[ch & 0x0F]);
+        }
+    }
+
+    return output;
+}
 } // namespace
 
 Session::Session() = default;
@@ -294,8 +314,7 @@ std::string Session::normalize_url(const std::string& raw_url) const {
     std::string url = trim(raw_url);
     if (url.empty()) return {};
     if (url.find(' ') != std::string::npos) {
-        std::replace(url.begin(), url.end(), ' ', '+');
-        return "https://duckduckgo.com/?q=" + url;
+        return "https://duckduckgo.com/?q=" + encode_query_component(url);
     }
     if (starts_with_http(url)) return url;
     return std::string("https://") + url;

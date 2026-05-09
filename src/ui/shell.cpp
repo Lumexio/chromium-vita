@@ -46,6 +46,9 @@ static constexpr float STICK_CURSOR_SPEED = 4.0f;
 static constexpr float TOUCH_SCROLL_FACTOR = 12.0f;
 static constexpr int VIEW_PADDING_TOP = 20;
 static constexpr int VIEW_LINE_HEIGHT = 18;
+static constexpr std::size_t URL_DISPLAY_MAX_CHARS = 76;
+static constexpr std::size_t TITLE_DISPLAY_MAX_CHARS = 46;
+static constexpr std::size_t STATUS_DISPLAY_MAX_CHARS = 52;
 
 struct Rect {
     int x;
@@ -281,7 +284,7 @@ void Shell::render() const {
     draw_border(url, focused_index() == static_cast<int>(Focus::Url) ? C_FOCUS : C_BORDER);
 
     if (m_font) {
-        const std::string shown_url = fit_text(m_session.current_url(), 76);
+        const std::string shown_url = fit_text(m_session.current_url(), URL_DISPLAY_MAX_CHARS);
         vita2d_pgf_draw_text(m_font, url.x + 8, url.y + 28, C_TEXT, 0.8f, shown_url.c_str());
     }
 
@@ -305,8 +308,8 @@ void Shell::render() const {
 
     vita2d_draw_rectangle(0, SCR_H - BOT_H, SCR_W, BOT_H, C_BOTTOMBAR);
     if (m_font) {
-        const std::string title = fit_text(m_session.display_title(), 46);
-        const std::string status = fit_text(m_menu_open ? m_menu_status : m_session.status_message(), 52);
+        const std::string title = fit_text(m_session.display_title(), TITLE_DISPLAY_MAX_CHARS);
+        const std::string status = fit_text(m_menu_open ? m_menu_status : m_session.status_message(), STATUS_DISPLAY_MAX_CHARS);
         vita2d_pgf_draw_text(m_font, 8, SCR_H - 16, C_TEXT_DIM, 0.62f,
                              "DPad/LStick Focus+Scroll  X Select  O Back  L/R Pg  Start Menu  Select Exit");
         vita2d_pgf_draw_text(m_font, 8, SCR_H - BOT_H + 14, C_TEXT, 0.7f, title.c_str());
