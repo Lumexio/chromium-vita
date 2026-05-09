@@ -14,6 +14,7 @@
 namespace browser {
 namespace {
 constexpr const char* HOME_URL = "https://example.com";
+constexpr const char* DEFAULT_SEARCH_ENGINE = "https://duckduckgo.com/?q=";
 
 bool starts_with_http(const std::string& url) {
     return url.rfind("http://", 0) == 0 || url.rfind("https://", 0) == 0;
@@ -196,6 +197,10 @@ void Session::save_storage() const {
 #else
     std::error_code ec;
     std::filesystem::create_directories(storage_dir(), ec);
+    if (ec) {
+        std::fprintf(stderr, "chromium-vita: failed to create storage dir '%s': %s\n",
+                     storage_dir().c_str(), ec.message().c_str());
+    }
 #endif
 
     {
@@ -314,7 +319,7 @@ std::string Session::normalize_url(const std::string& raw_url) const {
     std::string url = trim(raw_url);
     if (url.empty()) return {};
     if (url.find(' ') != std::string::npos) {
-        return "https://duckduckgo.com/?q=" + encode_query_component(url);
+        return std::string(DEFAULT_SEARCH_ENGINE) + encode_query_component(url);
     }
     if (starts_with_http(url)) return url;
     return std::string("https://") + url;

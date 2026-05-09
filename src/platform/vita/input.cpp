@@ -53,6 +53,10 @@ TouchPoint Input::previous_touch_point(int idx) const {
     };
 }
 
+bool Input::had_touch() const {
+    return m_prev_touch.reportNum > 0;
+}
+
 bool Input::touch_pressed() const {
     return m_prev_touch.reportNum == 0 && m_touch.reportNum > 0;
 }

@@ -29,11 +29,11 @@ static constexpr int BOT_H = 38;
 static constexpr int VIEW_Y = TOP_H;
 static constexpr int VIEW_H = SCR_H - TOP_H - BOT_H;
 
-static constexpr int BTN_W = 72;
-static constexpr int BTN_H = 40;
+static constexpr int BTN_WIDTH = 72;
+static constexpr int BTN_HEIGHT = 40;
 static constexpr int BTN_Y = 12;
 static constexpr int BTN_GAP = 8;
-static constexpr int URL_X = 4 + (BTN_W + BTN_GAP) * 4;
+static constexpr int URL_X = 4 + (BTN_WIDTH + BTN_GAP) * 4;
 static constexpr int URL_Y = 10;
 static constexpr int URL_W = SCR_W - URL_X - 8;
 static constexpr int URL_H = 44;
@@ -78,7 +78,7 @@ std::string fit_text(std::string text, std::size_t max_chars) {
 }
 
 Rect button_rect(int idx) {
-    return Rect{4 + idx * (BTN_W + BTN_GAP), BTN_Y, BTN_W, BTN_H};
+    return Rect{4 + idx * (BTN_WIDTH + BTN_GAP), BTN_Y, BTN_WIDTH, BTN_HEIGHT};
 }
 
 Rect url_rect() {
@@ -185,7 +185,7 @@ void Shell::handle_touch(const platform::vita::Input& input) {
 
     if (m_focus == Focus::Viewport && input.touch_count() > 0) {
         const auto prev = input.previous_touch_point(0);
-        if (prev.y != 0.0f) {
+        if (input.had_touch()) {
             const float dy = point.y - prev.y;
             m_scroll_line = std::max(0, m_scroll_line - static_cast<int>(dy / TOUCH_SCROLL_FACTOR));
         }

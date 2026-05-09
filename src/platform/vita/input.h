@@ -46,6 +46,7 @@ public:
     int        touch_count() const;
     TouchPoint touch_point(int idx) const;
     TouchPoint previous_touch_point(int idx) const;
+    bool       had_touch() const;
     bool       touch_pressed() const;
     bool       touch_released() const;
 
