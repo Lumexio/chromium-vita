@@ -8,6 +8,7 @@
 #include <sstream>
 
 #ifdef __vita__
+#include <psp2/io/dirent.h>
 #include <psp2/io/fcntl.h>
 #endif
 
