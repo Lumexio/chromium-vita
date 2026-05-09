@@ -69,12 +69,13 @@ void draw_border(const Rect& r, unsigned int color, float thickness = 2.0f) {
     vita2d_draw_rectangle(r.x + r.w - thickness, r.y, thickness, static_cast<float>(r.h), color);
 }
 
-std::string fit_text(std::string text, std::size_t max_chars) {
+std::string fit_text(const std::string& text, std::size_t max_chars) {
     if (text.size() <= max_chars) return text;
+    std::string clipped = text;
     if (max_chars < 4) return text.substr(0, max_chars);
-    text.resize(max_chars - 3);
-    text += "...";
-    return text;
+    clipped.resize(max_chars - 3);
+    clipped += "...";
+    return clipped;
 }
 
 Rect button_rect(int idx) {

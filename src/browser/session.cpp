@@ -198,7 +198,7 @@ void Session::save_storage() const {
     std::error_code ec;
     std::filesystem::create_directories(storage_dir(), ec);
     if (ec) {
-        std::fprintf(stderr, "chromium-vita: failed to create storage dir '%s': %s\n",
+        std::fprintf(stderr, "failed to create storage dir '%s': %s\n",
                      storage_dir().c_str(), ec.message().c_str());
     }
 #endif
