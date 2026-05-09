@@ -85,7 +85,7 @@ bool is_https_url(const std::string& url) {
 HttpClient::HttpClient() {
 #ifdef __vita__
     init_runtime();
-    m_ready = g_http_ready && g_ssl_ready;
+    m_ready = g_net_ready && g_http_ready && g_ssl_ready;
 #else
     m_ready = false;
 #endif
