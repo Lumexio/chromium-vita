@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <livearea style="psmobile-game-ft" type="marketing">
   <livearea-background>
-    <image z="0">bg.png</image>
+    <image z="0">bg0.png</image>
   </livearea-background>
   <gate>
     <startup-image>startup.png</startup-image>

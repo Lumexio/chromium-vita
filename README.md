@@ -160,6 +160,13 @@ Build a practical, installable VPK browser for PS Vita (3.60/3.65 homebrew), wit
 - `sce_sys/livearea/contents/*` (LiveArea assets/templates)
 - App resources (fonts, certs, default config) in predictable internal paths
 
+### LiveArea asset naming used by this project
+- `sce_sys/icon0.png` (128x128)
+- `sce_sys/pic0.png` (960x544)
+- `sce_sys/livearea/contents/bg0.png` (840x500)
+- `sce_sys/livearea/contents/startup.png` (280x158)
+- `sce_sys/livearea/contents/template.xml`
+
 ### Metadata guidance
 - TitleID: unique homebrew-safe ID format (avoid collisions)
 - `param.sfo`: clear app name, version, and category
