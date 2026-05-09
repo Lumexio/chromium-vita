@@ -1,0 +1,52 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: vitasdk/vitasdk:latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate placeholder assets
+        run: python3 scripts/gen_assets.py
+
+      - name: Install build tools
+        run: |
+          if command -v apk >/dev/null 2>&1; then
+            apk add --no-cache ninja
+          elif command -v apt-get >/dev/null 2>&1; then
+            apt-get update
+            apt-get install -y ninja-build
+          else
+            echo "No supported package manager found." >&2
+            exit 1
+          fi
+
+      - name: Configure (Release)
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$VITASDK/share/vita.toolchain.cmake" \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Upload VPK
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-vita-${{ github.sha }}
+          path: build/chromium-vita.vpk
+          if-no-files-found: error

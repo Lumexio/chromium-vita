@@ -1,0 +1,11 @@
+# Build output
+build/
+*.vpk
+*.self
+*.velf
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~
