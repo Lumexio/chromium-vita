@@ -21,7 +21,12 @@ jobs:
 
       - name: Generate placeholder assets
         run: python3 scripts/gen_assets.py
-
+        
+      - name: Install build tools
+        run: |
+          apt-get update
+          apt-get install -y ninja-build
+          
       - name: Configure (Release)
         run: |
           cmake -B build \
