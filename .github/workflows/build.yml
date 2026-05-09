@@ -1,0 +1,40 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: vitasdk/vitasdk:latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate placeholder assets
+        run: python3 scripts/gen_assets.py
+
+      - name: Configure (Release)
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$VITASDK/share/vita.toolchain.cmake" \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Upload VPK
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-vita-${{ github.sha }}
+          path: build/chromium-vita.vpk
+          if-no-files-found: error
