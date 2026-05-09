@@ -41,10 +41,8 @@ ASSETS = [
 ]
 
 
-def main() -> None:
-    script_dir  = os.path.dirname(os.path.abspath(__file__))
-    project_dir = os.path.dirname(script_dir)
-
+def generate_assets(project_dir: str) -> list[str]:
+    generated: list[str] = []
     for rel_path, w, h, r, g, b in ASSETS:
         out_path = os.path.join(project_dir, rel_path)
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -52,6 +50,14 @@ def main() -> None:
         with open(out_path, "wb") as fh:
             fh.write(data)
         print(f"  generated  {rel_path}  ({w}×{h})")
+        generated.append(rel_path)
+    return generated
+
+
+def main() -> None:
+    script_dir  = os.path.dirname(os.path.abspath(__file__))
+    project_dir = os.path.dirname(script_dir)
+    generate_assets(project_dir)
 
 
 if __name__ == "__main__":
