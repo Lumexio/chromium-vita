@@ -26,7 +26,10 @@ endif()
 
 add_executable(${PROJECT_NAME}
   src/main.cpp
+  src/browser/http_client.cpp
+  src/browser/session.cpp
   src/platform/vita/display.cpp
+  src/platform/vita/ime.cpp
   src/platform/vita/input.cpp
   src/ui/shell.cpp
 )
@@ -39,6 +42,11 @@ target_link_libraries(${PROJECT_NAME}
   SceCtrl_stub
   SceTouch_stub
   SceSysmodule_stub
+  SceHttp_stub
+  SceSsl_stub
+  SceNet_stub
+  SceNetCtl_stub
+  SceIme_stub
   SceGxm_stub
   SceCommonDialog_stub
   SceAppMgr_stub
