@@ -26,23 +26,28 @@ int  g_ref_count  = 0;
 std::array<char, NET_POOL_SIZE> g_net_mem{};
 
 void init_runtime() {
-    if (g_ref_count++ > 0) return;
+    if (g_ref_count > 0 && g_net_ready && g_ssl_ready && g_http_ready) {
+        ++g_ref_count;
+        return;
+    }
+
+    ++g_ref_count;
 
     SceNetInitParam net_param{};
     net_param.memory = g_net_mem.data();
     net_param.size = NET_POOL_SIZE;
     net_param.flags = 0;
 
-    if (sceNetInit(&net_param) >= 0) {
+    if (!g_net_ready && sceNetInit(&net_param) >= 0) {
         g_net_ready = true;
         sceNetCtlInit();
     }
 
-    if (sceSslInit(HTTP_POOL_SIZE) >= 0) {
+    if (!g_ssl_ready && sceSslInit(HTTP_POOL_SIZE) >= 0) {
         g_ssl_ready = true;
     }
 
-    if (sceHttpInit(HTTP_POOL_SIZE) >= 0) {
+    if (!g_http_ready && sceHttpInit(HTTP_POOL_SIZE) >= 0) {
         g_http_ready = true;
     }
 }
