@@ -37,6 +37,7 @@ def _make_png(width: int, height: int, r: int, g: int, b: int) -> bytes:
 
 # (output_path, width, height, R, G, B)
 ASSETS = [
+    ("sce_sys/pic0.png",                        960, 544, 0x10, 0x10, 0x18),
     ("sce_sys/icon0.png",                       128, 128, 0x1E, 0x1E, 0x3C),
     ("sce_sys/livearea/contents/bg.png",         840, 500, 0x10, 0x10, 0x18),
     ("sce_sys/livearea/contents/startup.png",    280, 158, 0x1E, 0x1E, 0x3C),
