@@ -176,7 +176,7 @@ Build a practical, installable VPK browser for PS Vita (3.60/3.65 homebrew), wit
 
 ---
 
-## 9) Local tests
+## Local tests
 
 - Run host-side unit tests for tooling scripts:
   - `python3 -m unittest discover -s tests -v`
