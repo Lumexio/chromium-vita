@@ -85,7 +85,7 @@ Build a practical, installable VPK browser for PS Vita (3.60/3.65 homebrew), wit
 
 2. From the repository root:
    ```bash
-   cd /home/runner/work/chromium-vita/chromium-vita
+   cd /path/to/chromium-vita
    python3 scripts/gen_assets.py
    cmake -B build \
      -DCMAKE_BUILD_TYPE=Release \
@@ -96,7 +96,7 @@ Build a practical, installable VPK browser for PS Vita (3.60/3.65 homebrew), wit
 
 3. Generated installable package:
    ```bash
-   /home/runner/work/chromium-vita/chromium-vita/build/chromium-vita.vpk
+   build/chromium-vita.vpk
    ```
 
 4. Copy the `.vpk` to your Vita (VitaShell USB/FTP) and install it from VitaShell.
