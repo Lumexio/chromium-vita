@@ -43,6 +43,8 @@ jobs:
            ./bootstrap-vitasdk.sh
            ./install-all.sh
            vitasdk-update
+           echo "VITASDK=$VITASDK" >> $GITHUB_ENV
+           echo "PATH=$VITASDK/bin:$PATH" >> $GITHUB_ENV
       - name: Configure (Release)
         run: |
           cmake -B build \
