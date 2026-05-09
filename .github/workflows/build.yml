@@ -33,7 +33,15 @@ jobs:
             echo "No supported package manager found." >&2
             exit 1
           fi
-
+      - name: Install VitaSDK (headers + toolchain)
+        run: |
+           export VITASDK=/usr/local/vitasdk
+           export PATH=$VITASDK/bin:$PATH
+           git clone https://github.com/vitasdk/vdpm
+           cd vdpm
+           ./bootstrap-vitasdk.sh
+           ./install-all.sh
+           vitasdk-update
       - name: Configure (Release)
         run: |
           cmake -B build \
