@@ -45,7 +45,7 @@ bool Ime::prompt_url(const std::string& title, const std::string& initial_text, 
     param.type = SCE_IME_TYPE_URL;
     param.option = 0;
     param.title = reinterpret_cast<const SceWChar16*>(title16.c_str());
-    param.initialText = reinterpret_cast<const SceWChar16*>(initial16.c_str());
+    param.initialText = reinterpret_cast<SceWChar16*>(const_cast<char16_t*>(initial16.c_str()));
     param.maxTextLength = MAX_TEXT;
     param.inputTextBuffer = reinterpret_cast<SceWChar16*>(buffer.data());
 
