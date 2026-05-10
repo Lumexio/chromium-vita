@@ -17,12 +17,22 @@ set(VITA_VERSION  "01.00")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CHROMIUM_VITA_NETSURF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/netsurf" CACHE PATH
+    "Path to NetSurf source/scaffolding directory")
 
 # Size-optimised release build
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   add_compile_options(-Os -ffunction-sections -fdata-sections)
   add_link_options(-Wl,--gc-sections)
 endif()
+
+add_library(netsurf_scaffold STATIC
+  ${CHROMIUM_VITA_NETSURF_DIR}/scaffold/src/scaffold.c
+)
+
+target_include_directories(netsurf_scaffold PUBLIC
+  ${CHROMIUM_VITA_NETSURF_DIR}/scaffold/include
+)
 
 add_executable(${PROJECT_NAME}
   src/main.cpp
@@ -31,10 +41,14 @@ add_executable(${PROJECT_NAME}
   src/platform/vita/display.cpp
   src/platform/vita/ime.cpp
   src/platform/vita/input.cpp
+  src/platform/vita/netsurf_frontend.cpp
   src/ui/shell.cpp
 )
 
-target_include_directories(${PROJECT_NAME} PRIVATE src)
+target_include_directories(${PROJECT_NAME} PRIVATE
+  src
+  ${CHROMIUM_VITA_NETSURF_DIR}/scaffold/include
+)
 
 target_link_libraries(${PROJECT_NAME}
   vita2d
@@ -57,6 +71,7 @@ target_link_libraries(${PROJECT_NAME}
   z
   m
   c
+  netsurf_scaffold
 )
 
 vita_create_self(${PROJECT_NAME}.self ${PROJECT_NAME} UNSAFE)

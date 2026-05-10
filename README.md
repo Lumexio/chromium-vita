@@ -101,6 +101,19 @@ Build a practical, installable VPK browser for PS Vita (3.60/3.65 homebrew), wit
 
 4. Copy the `.vpk` to your Vita (VitaShell USB/FTP) and install it from VitaShell.
 
+### NetSurf integration scaffolding
+- This repository now includes a bundled NetSurf frontend scaffold at:
+  - `third_party/netsurf/scaffold`
+- Build integration is wired through CMake (`netsurf_scaffold` static library) and linked into the app.
+- To use a different NetSurf source checkout, override:
+  - `-DCHROMIUM_VITA_NETSURF_DIR=/absolute/path/to/netsurf`
+- Current scaffold flow on Vita:
+  - initialize NetSurf core/context
+  - create a frontend browser window sized to the viewport
+  - render NetSurf surface into a software RGBA buffer
+  - upload buffer into a `vita2d` texture and draw it each frame
+  - map Vita controller + touch input into frontend key/pointer events
+
 ---
 
 ## 4) Porting strategy (milestones)
