@@ -39,6 +39,7 @@ jobs:
           export PATH=$VITASDK/bin:$PATH
           echo "VITASDK=$VITASDK" >> $GITHUB_ENV
           echo "PATH=$VITASDK/bin:$PATH" >> $GITHUB_ENV
+          rm -rf /usr/local/vitasdk
           git clone https://github.com/vitasdk/vdpm
           ls
           cd vdpm
@@ -46,6 +47,7 @@ jobs:
           ./bootstrap-vitasdk.sh
           ./install-all.sh
           vitasdk-update
+          rm -rf /usr/local/vitasdk
       - name: Configure (Release)
         run: |
           cmake -B build \
