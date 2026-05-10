@@ -33,21 +33,24 @@ jobs:
             echo "No supported package manager found." >&2
             exit 1
           fi
-      - name: Use preinstalled VitaSDK
+      - name: VitaSDK instalation
         run: |
-          export VITASDK=/usr/local/vitasdk
-          export PATH=$VITASDK/bin:$PATH
-          echo "VITASDK=$VITASDK" >> $GITHUB_ENV
-          echo "PATH=$VITASDK/bin:$PATH" >> $GITHUB_ENV
+          echo "Removing vitasdk"
           rm -rf /usr/local/vitasdk
+          echo "Download git vitasdk"
           git clone https://github.com/vitasdk/vdpm
           ls
           cd vdpm
           ls
+          echo "Install vitasdk dependencies"
           ./bootstrap-vitasdk.sh
           ./install-all.sh
+          echo "Export envs"
+          export VITASDK=/usr/local/vitasdk
+          export PATH=$VITASDK/bin:$PATH
+          echo "VITASDK=$VITASDK" >> $GITHUB_ENV
+          echo "PATH=$VITASDK/bin:$PATH" >> $GITHUB_ENV
           vitasdk-update
-          rm -rf /usr/local/vitasdk
       - name: Configure (Release)
         run: |
           cmake -B build \
