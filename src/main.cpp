@@ -1,5 +1,6 @@
 #include <psp2/kernel/processmgr.h>
 #ifdef __vita__
+#include <psp2/kernel/threadmgr.h>
 #include <psp2/sysmodule.h>
 #endif
 #include <vita2d.h>
@@ -47,6 +48,9 @@ int main() {
         shell.render();
         vita2d_end_drawing();
         vita2d_swap_buffers();
+#ifdef __vita__
+        sceKernelDelayThread(1000);
+#endif
     }
 
     shell.shutdown();
