@@ -21,7 +21,10 @@ jobs:
 
       - name: Generate placeholder assets
         run: python3 scripts/gen_assets.py
-
+      - name: Install Vita SDK deps
+        run: |
+          vdpm update
+          vdpm install libssl
       - name: Install build tools
         run: |
           if command -v apk >/dev/null 2>&1; then
