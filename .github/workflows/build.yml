@@ -26,10 +26,11 @@ jobs:
            sudo rm -rf /usr/local/vitasdk
            export VITASDK=/usr/local/vitasdk
            export PATH=$VITASDK/bin:$PATH
-           git clone https://github.com/vitasdk/vdpm /tmp/vdpm
-           cd /tmp/vdm
+           git clone https://github.com/vitasdk/vdpm 
+           cd vdmp
            ./bootstrap-vitasdk.sh
            ./install-all.sh
+           cd ..
            ls /usr/local/vitasdk/share/vita.toolchain.cmake
       - name: Generate placeholder assets
         run: python3 scripts/gen_assets.py
