@@ -307,16 +307,35 @@ void Shell::render() {
     if (focused_index() == static_cast<int>(Focus::Viewport)) {
         draw_border(viewport_rect(), C_FOCUS, 3.0f);
     }
-    m_netsurf.render(0.0f, static_cast<float>(VIEW_Y));
+    if (m_netsurf_ready) {
+        m_netsurf.render(0.0f, static_cast<float>(VIEW_Y));
+    } else if (m_font) {
+        const auto& lines = m_session.page_lines();
+        const int base_y = VIEW_Y + VIEW_PADDING_TOP;
+        const int line_h = VIEW_LINE_HEIGHT;
+        const int visible_lines = (VIEW_H - VIEW_PADDING_TOP) / line_h;
+
+        for (int i = 0; i < visible_lines; ++i) {
+            const int idx = m_scroll_line + i;
+            if (idx >= static_cast<int>(lines.size())) break;
+            vita2d_pgf_draw_text(m_font, 12, base_y + i * line_h, C_TEXT, 0.75f, lines[idx].c_str());
+        }
+    }
 
     vita2d_draw_rectangle(0, SCR_H - BOT_H, SCR_W, BOT_H, C_BOTTOMBAR);
     if (m_font) {
         const std::string title = fit_text(m_session.display_title(), TITLE_DISPLAY_MAX_CHARS);
-        std::string status =
-            m_menu_open ? m_menu_status : (m_netsurf_ready ? m_netsurf.status_message() : m_session.status_message());
+        std::string status;
+        if (m_menu_open) {
+            status = m_menu_status;
+        } else if (m_netsurf_ready) {
+            status = m_netsurf.status_message();
+        } else {
+            status = m_session.status_message();
+        }
         status = fit_text(status, STATUS_DISPLAY_MAX_CHARS);
         vita2d_pgf_draw_text(m_font, 8, SCR_H - 16, C_TEXT_DIM, 0.62f,
-                             "NetSurf scaffold: pad/touch events mapped to frontend window");
+                             "DPad/LStick Focus+Scroll  X Select  O Back  L/R Pg  START Menu  SELECT Exit");
         vita2d_pgf_draw_text(m_font, 8, SCR_H - BOT_H + 14, C_TEXT, 0.7f, title.c_str());
         vita2d_pgf_draw_text(m_font, SCR_W / 2, SCR_H - BOT_H + 14, C_TEXT_DIM, 0.7f, status.c_str());
     }

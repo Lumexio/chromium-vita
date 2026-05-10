@@ -9,6 +9,10 @@ extern "C" {
 typedef struct ns_scaffold_context ns_scaffold_context;
 typedef struct ns_scaffold_window ns_scaffold_window;
 
+#define NS_SCAFFOLD_URL_CAPACITY 256
+#define NS_SCAFFOLD_TITLE_CAPACITY 128
+#define NS_SCAFFOLD_BODY_CAPACITY 4096
+
 typedef enum ns_scaffold_key {
     NS_SCAFFOLD_KEY_UP = 0,
     NS_SCAFFOLD_KEY_DOWN,

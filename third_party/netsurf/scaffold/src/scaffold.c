@@ -16,9 +16,15 @@ struct ns_scaffold_window {
     int pointer_pressed;
     int scroll_lines;
 
-    char url[256];
-    char title[128];
-    char body[4096];
+    /* Fixed capacities are intentionally small for Vita scaffold memory budgets. */
+    char url[NS_SCAFFOLD_URL_CAPACITY];
+    char title[NS_SCAFFOLD_TITLE_CAPACITY];
+    char body[NS_SCAFFOLD_BODY_CAPACITY];
+};
+
+enum {
+    NS_SCAFFOLD_MAX_VISIBLE_LINES = 28,
+    NS_SCAFFOLD_MAX_SOURCE_LINE_CHARS = 120,
 };
 
 static uint32_t make_rgba(unsigned int r, unsigned int g, unsigned int b) {
@@ -93,7 +99,9 @@ ns_scaffold_window* ns_scaffold_create_window(ns_scaffold_context* ctx, int widt
     window->pointer_x = width / 2;
     window->pointer_y = height / 2;
     strncpy(window->url, "about:blank", sizeof(window->url) - 1);
+    window->url[sizeof(window->url) - 1] = '\0';
     strncpy(window->title, "NetSurf scaffold", sizeof(window->title) - 1);
+    window->title[sizeof(window->title) - 1] = '\0';
     return window;
 }
 
@@ -182,10 +190,11 @@ void ns_scaffold_render_rgba(ns_scaffold_window* window, uint32_t* pixels, int w
 
     line_index = 0;
     cursor = window->body;
-    while (*cursor != '\0' && line_index < 28) {
+    while (*cursor != '\0' && line_index < NS_SCAFFOLD_MAX_VISIBLE_LINES) {
         int len = 0;
         int y;
-        while (*cursor != '\0' && *cursor != '\n' && len < 120) {
+        while (*cursor != '\0' && *cursor != '\n' &&
+               len < NS_SCAFFOLD_MAX_SOURCE_LINE_CHARS) {
             ++len;
             ++cursor;
         }

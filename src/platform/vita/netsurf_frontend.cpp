@@ -6,11 +6,15 @@
 #include <netsurf/scaffold.h>
 
 namespace platform::vita {
+namespace {
+constexpr uint32_t kDefaultSurfaceColor = 0xFF101018u;
+}
 
 bool NetSurfFrontend::init(int width, int height) {
     m_width = width;
     m_height = height;
-    m_surface.assign(static_cast<std::size_t>(m_width * m_height), 0xFF101018u);
+    m_surface.assign(static_cast<std::size_t>(m_width) * static_cast<std::size_t>(m_height),
+                     kDefaultSurfaceColor);
 
     if (ns_scaffold_init(&m_ctx) != 0 || !m_ctx) {
         m_status = "NetSurf core init failed";
@@ -60,10 +64,11 @@ void NetSurfFrontend::update_document(const std::string&                url,
     if (!m_window) return;
 
     std::string body;
-    body.reserve(4096);
+    constexpr std::size_t kMaxBodyBytes = NS_SCAFFOLD_BODY_CAPACITY - 1;
     for (const auto& line : lines) {
+        const std::size_t needed = line.size() + (body.empty() ? 0u : 1u);
+        if (body.size() + needed > kMaxBodyBytes) break;
         if (!body.empty()) body.push_back('\n');
-        if (body.size() + line.size() > 4000) break;
         body.append(line);
     }
 
