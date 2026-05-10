@@ -22,7 +22,7 @@ jobs:
         run: |
            ls
            echo "||||||||| Current path |||||"
-           which
+           pwd
            git clone https://github.com/vitasdk/vdpm /tmp/vdpm
            sudo rm -rf /usr/local/vitasdk
            export VITASDK=/usr/local/vitasdk
@@ -32,7 +32,6 @@ jobs:
            ./bootstrap-vitasdk.sh
            ./install-all.sh
            ls /usr/local/vitasdk/share/vita.toolchain.cmake
-            cd ~/chromium-vita
       - name: Generate placeholder assets
         run: python3 scripts/gen_assets.py
 
