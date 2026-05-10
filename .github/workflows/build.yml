@@ -23,7 +23,6 @@ jobs:
            ls
            echo "||||||||| Current path |||||"
            pwd
-           git clone https://github.com/vitasdk/vdpm /tmp/vdpm
            sudo rm -rf /usr/local/vitasdk
            export VITASDK=/usr/local/vitasdk
            export PATH=$VITASDK/bin:$PATH
