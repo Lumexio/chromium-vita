@@ -18,13 +18,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+      - name: Install VitaSDK (headers + toolchain)
+        run: |
+           ls
+           export VITASDK=/usr/local/vitasdk
+           export PATH=$VITASDK/bin:$PATH
+           ./bootstrap-vitasdk.sh
+           ./install-all.sh
       - name: Generate placeholder assets
         run: python3 scripts/gen_assets.py
-      - name: Install Vita SDK deps
-        run: |
-          vdpm update
-          vdpm install libssl
+
       - name: Install build tools
         run: |
           if command -v apk >/dev/null 2>&1; then
