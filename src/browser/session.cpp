@@ -10,6 +10,7 @@
 #ifdef __vita__
 #include <psp2/io/dirent.h>
 #include <psp2/io/fcntl.h>
+#include <psp2/io/filemgr.h> // add this
 #endif
 
 namespace browser {
