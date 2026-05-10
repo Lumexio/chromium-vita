@@ -8,7 +8,7 @@
 #include <psp2/net/http.h>
 #include <psp2/net/net.h>
 #include <psp2/net/netctl.h>
-#include <psp2/ssl.h>
+#include <psp2/libssl.h>
 #endif
 
 namespace browser {
