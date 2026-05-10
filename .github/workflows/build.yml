@@ -30,8 +30,13 @@ jobs:
            cd vdpm/
            ./bootstrap-vitasdk.sh
            ./install-all.sh
+           export VITASDK=/usr/local/vitasdk
+           export PATH=$VITASDK/bin:$PATH
+           echo "Make sure cmake exist"
            ls /usr/local/vitasdk/share/vita.toolchain.cmake
+           pwd
            cd ..
+           pwd
       - name: Generate placeholder assets
         run: python3 scripts/gen_assets.py
 
@@ -49,6 +54,7 @@ jobs:
 
       - name: Configure (Release)
         run: |
+          pwd
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE="$VITASDK/share/vita.toolchain.cmake" \
