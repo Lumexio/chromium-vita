@@ -45,6 +45,10 @@ public:
     // Front touchscreen.
     int        touch_count() const;
     TouchPoint touch_point(int idx) const;
+    TouchPoint previous_touch_point(int idx) const;
+    bool       had_touch() const;
+    bool       touch_pressed() const;
+    bool       touch_released() const;
 
     // Analogue sticks normalised to [-1, +1].
     float left_stick_x()  const;
@@ -56,6 +60,7 @@ private:
     SceCtrlData  m_curr{};
     SceCtrlData  m_prev{};
     SceTouchData m_touch{};
+    SceTouchData m_prev_touch{};
 };
 
 } // namespace platform::vita
