@@ -96,6 +96,8 @@ Rect viewport_rect() {
 void Shell::init() {
     m_font = vita2d_load_default_pgf();
     m_session.init();
+    m_netsurf_ready = m_netsurf.init(SCR_W, VIEW_H);
+    sync_netsurf_document();
     m_focus = Focus::Viewport;
     m_scroll_line = 0;
     m_menu_open = false;
@@ -103,6 +105,7 @@ void Shell::init() {
 }
 
 void Shell::shutdown() {
+    m_netsurf.shutdown();
     m_session.shutdown();
     if (m_font) {
         vita2d_free_pgf(m_font);
@@ -121,6 +124,7 @@ void Shell::open_url_ime() {
     if (m_ime.prompt_url("Open URL", m_session.current_url(), entered)) {
         m_session.navigate(entered);
         m_scroll_line = 0;
+        sync_netsurf_document();
     }
 }
 
@@ -137,18 +141,22 @@ void Shell::activate_focus() {
         case Focus::Back:
             m_session.go_back();
             m_scroll_line = 0;
+            sync_netsurf_document();
             break;
         case Focus::Forward:
             m_session.go_forward();
             m_scroll_line = 0;
+            sync_netsurf_document();
             break;
         case Focus::Reload:
             m_session.reload();
             m_scroll_line = 0;
+            sync_netsurf_document();
             break;
         case Focus::Home:
             m_session.go_home();
             m_scroll_line = 0;
+            sync_netsurf_document();
             break;
         case Focus::Url:
             open_url_ime();
@@ -207,6 +215,7 @@ void Shell::handle_input(const platform::vita::Input& input) {
         m_session.go_back();
         m_focus = Focus::Viewport;
         m_scroll_line = 0;
+        sync_netsurf_document();
     }
 
     if (input.pressed(platform::vita::Button::Cross)) {
@@ -251,10 +260,15 @@ void Shell::handle_input(const platform::vita::Input& input) {
     }
 
     handle_touch(input);
+    m_netsurf.handle_input(input, VIEW_Y, m_focus == Focus::Viewport);
 
     const int visible_lines = (VIEW_H - VIEW_PADDING_TOP) / VIEW_LINE_HEIGHT;
     const int max_scroll = std::max(0, static_cast<int>(m_session.page_lines().size()) - visible_lines);
     m_scroll_line = std::clamp(m_scroll_line, 0, max_scroll);
+}
+
+void Shell::sync_netsurf_document() {
+    m_netsurf.update_document(m_session.current_url(), m_session.display_title(), m_session.page_lines());
 }
 
 int Shell::focused_index() const {
@@ -265,7 +279,7 @@ bool Shell::should_exit() const {
     return m_should_exit;
 }
 
-void Shell::render() const {
+void Shell::render() {
     vita2d_draw_rectangle(0, 0, SCR_W, SCR_H, C_BG);
 
     vita2d_draw_rectangle(0, 0, SCR_W, TOP_H, C_TOPBAR);
@@ -293,8 +307,9 @@ void Shell::render() const {
     if (focused_index() == static_cast<int>(Focus::Viewport)) {
         draw_border(viewport_rect(), C_FOCUS, 3.0f);
     }
-
-    if (m_font) {
+    if (m_netsurf_ready) {
+        m_netsurf.render(0.0f, static_cast<float>(VIEW_Y));
+    } else if (m_font) {
         const auto& lines = m_session.page_lines();
         const int base_y = VIEW_Y + VIEW_PADDING_TOP;
         const int line_h = VIEW_LINE_HEIGHT;
@@ -310,7 +325,15 @@ void Shell::render() const {
     vita2d_draw_rectangle(0, SCR_H - BOT_H, SCR_W, BOT_H, C_BOTTOMBAR);
     if (m_font) {
         const std::string title = fit_text(m_session.display_title(), TITLE_DISPLAY_MAX_CHARS);
-        const std::string status = fit_text(m_menu_open ? m_menu_status : m_session.status_message(), STATUS_DISPLAY_MAX_CHARS);
+        std::string status;
+        if (m_menu_open) {
+            status = m_menu_status;
+        } else if (m_netsurf_ready) {
+            status = m_netsurf.status_message();
+        } else {
+            status = m_session.status_message();
+        }
+        status = fit_text(status, STATUS_DISPLAY_MAX_CHARS);
         vita2d_pgf_draw_text(m_font, 8, SCR_H - 16, C_TEXT_DIM, 0.62f,
                              "DPad/LStick Focus+Scroll  X Select  O Back  L/R Pg  START Menu  SELECT Exit");
         vita2d_pgf_draw_text(m_font, 8, SCR_H - BOT_H + 14, C_TEXT, 0.7f, title.c_str());
