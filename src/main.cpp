@@ -12,10 +12,14 @@ int main() {
 #ifdef __vita__
     // Load modules required by PGF fonts, IME dialog, and networking.
     sceSysmoduleLoadModule(SCE_SYSMODULE_PGF);
+#if defined(SCE_SYSMODULE_COMMON_DIALOG)
     sceSysmoduleLoadModule(SCE_SYSMODULE_COMMON_DIALOG);
+#endif
     sceSysmoduleLoadModule(SCE_SYSMODULE_IME);
     sceSysmoduleLoadModule(SCE_SYSMODULE_NET);
+#if defined(SCE_SYSMODULE_NETCTL)
     sceSysmoduleLoadModule(SCE_SYSMODULE_NETCTL);
+#endif
     sceSysmoduleLoadModule(SCE_SYSMODULE_SSL);
     sceSysmoduleLoadModule(SCE_SYSMODULE_HTTP);
 #endif
@@ -51,10 +55,14 @@ int main() {
 #ifdef __vita__
     sceSysmoduleUnloadModule(SCE_SYSMODULE_HTTP);
     sceSysmoduleUnloadModule(SCE_SYSMODULE_SSL);
+#if defined(SCE_SYSMODULE_NETCTL)
     sceSysmoduleUnloadModule(SCE_SYSMODULE_NETCTL);
+#endif
     sceSysmoduleUnloadModule(SCE_SYSMODULE_NET);
     sceSysmoduleUnloadModule(SCE_SYSMODULE_IME);
+#if defined(SCE_SYSMODULE_COMMON_DIALOG)
     sceSysmoduleUnloadModule(SCE_SYSMODULE_COMMON_DIALOG);
+#endif
     sceSysmoduleUnloadModule(SCE_SYSMODULE_PGF);
 #endif
 
