@@ -63,6 +63,7 @@ target_link_libraries(${PROJECT_NAME}
   SceIme_stub
   SceGxm_stub
   SceCommonDialog_stub
+  SceAppUtil_stub
   SceAppMgr_stub
   ScePgf_stub
   freetype

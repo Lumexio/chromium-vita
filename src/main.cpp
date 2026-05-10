@@ -1,6 +1,8 @@
 #include <psp2/kernel/processmgr.h>
 #ifdef __vita__
 #include <psp2/sysmodule.h>
+#include <psp2/common_dialog.h>
+#include <psp2/apputil.h>
 #endif
 #include <vita2d.h>
 
@@ -22,6 +24,18 @@ int main() {
 #endif
     sceSysmoduleLoadModule(SCE_SYSMODULE_SSL);
     sceSysmoduleLoadModule(SCE_SYSMODULE_HTTP);
+#if defined(SCE_SYSMODULE_HTTPS)
+    sceSysmoduleLoadModule(SCE_SYSMODULE_HTTPS);
+#endif
+
+    SceAppUtilInitParam app_init{};
+    SceAppUtilBootParam app_boot{};
+    sceAppUtilInit(&app_init, &app_boot);
+
+    // Configure common dialog defaults once for IME/message dialogs.
+    SceCommonDialogConfigParam dialog_param{};
+    sceCommonDialogConfigParamInit(&dialog_param);
+    sceCommonDialogSetConfigParam(&dialog_param);
 #endif
 
     vita2d_init();
@@ -46,15 +60,20 @@ int main() {
         vita2d_clear_screen();
         shell.render();
         vita2d_end_drawing();
+        shell.post_render();
         vita2d_swap_buffers();
     }
 
+    vita2d_wait_rendering_done();
     shell.shutdown();
     vita2d_fini();
 
 #ifdef __vita__
     sceSysmoduleUnloadModule(SCE_SYSMODULE_HTTP);
     sceSysmoduleUnloadModule(SCE_SYSMODULE_SSL);
+#if defined(SCE_SYSMODULE_HTTPS)
+    sceSysmoduleUnloadModule(SCE_SYSMODULE_HTTPS);
+#endif
 #if defined(SCE_SYSMODULE_NETCTL)
     sceSysmoduleUnloadModule(SCE_SYSMODULE_NETCTL);
 #endif
@@ -64,6 +83,8 @@ int main() {
     sceSysmoduleUnloadModule(SCE_SYSMODULE_COMMON_DIALOG);
 #endif
     sceSysmoduleUnloadModule(SCE_SYSMODULE_PGF);
+
+    sceAppUtilShutdown();
 #endif
 
     sceKernelExitProcess(0);

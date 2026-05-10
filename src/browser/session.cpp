@@ -1,8 +1,10 @@
 #include "session.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -16,7 +18,26 @@
 namespace browser {
 namespace {
 constexpr const char* HOME_URL = "https://example.com";
-constexpr const char* DEFAULT_SEARCH_ENGINE = "https://duckduckgo.com/?q=";
+struct LoadJob {
+    Session* session;
+    std::string url;
+};
+struct SearchEngine {
+    const char* name;
+    const char* query_url;
+};
+
+constexpr std::array<SearchEngine, 3> kSearchEngines = {
+    SearchEngine{"DuckDuckGo", "https://duckduckgo.com/html/?q="},
+    SearchEngine{"Google", "https://www.google.com/search?gbv=1&q="},
+    SearchEngine{"Bing", "https://www.bing.com/search?q="},
+};
+
+int clamp_engine_index(int idx) {
+    if (idx < 0) return 0;
+    if (idx >= static_cast<int>(kSearchEngines.size())) return 0;
+    return idx;
+}
 
 bool starts_with_http(const std::string& url) {
     return url.rfind("http://", 0) == 0 || url.rfind("https://", 0) == 0;
@@ -57,6 +78,94 @@ std::string encode_query_component(const std::string& input) {
 
     return output;
 }
+
+int hex_value(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+    if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+    return -1;
+}
+
+std::string decode_query_component(const std::string& input) {
+    std::string output;
+    output.reserve(input.size());
+    for (std::size_t i = 0; i < input.size(); ++i) {
+        char ch = input[i];
+        if (ch == '+' ) {
+            output.push_back(' ');
+            continue;
+        }
+        if (ch == '%' && i + 2 < input.size()) {
+            const int hi = hex_value(input[i + 1]);
+            const int lo = hex_value(input[i + 2]);
+            if (hi >= 0 && lo >= 0) {
+                output.push_back(static_cast<char>((hi << 4) | lo));
+                i += 2;
+                continue;
+            }
+        }
+        output.push_back(ch);
+    }
+    return output;
+}
+
+std::string strip_tags(const std::string& input) {
+    std::string output;
+    output.reserve(input.size());
+    bool in_tag = false;
+    for (char ch : input) {
+        if (ch == '<') {
+            in_tag = true;
+            continue;
+        }
+        if (ch == '>') {
+            in_tag = false;
+            continue;
+        }
+        if (!in_tag) output.push_back(ch);
+    }
+    return output;
+}
+
+std::string html_unescape(const std::string& input) {
+    std::string out;
+    out.reserve(input.size());
+
+    for (std::size_t i = 0; i < input.size(); ++i) {
+        if (input[i] != '&') {
+            out.push_back(input[i]);
+            continue;
+        }
+
+        const std::size_t semi = input.find(';', i + 1);
+        if (semi == std::string::npos) {
+            out.push_back(input[i]);
+            continue;
+        }
+
+        const std::string ent = input.substr(i + 1, semi - i - 1);
+        if (ent == "amp") out.push_back('&');
+        else if (ent == "lt") out.push_back('<');
+        else if (ent == "gt") out.push_back('>');
+        else if (ent == "quot") out.push_back('"');
+        else if (ent == "#39") out.push_back('\'');
+        else {
+            out.append("&").append(ent).append(";");
+        }
+        i = semi;
+    }
+
+    return out;
+}
+
+std::string extract_ddg_redirect(const std::string& href) {
+    const std::string key = "uddg=";
+    const std::size_t pos = href.find(key);
+    if (pos == std::string::npos) return href;
+    const std::size_t start = pos + key.size();
+    const std::size_t end = href.find('&', start);
+    return decode_query_component(href.substr(start, end == std::string::npos ? end : end - start));
+}
 } // namespace
 
 Session::Session() = default;
@@ -74,7 +183,91 @@ void Session::init() {
 }
 
 void Session::shutdown() {
+#ifdef __vita__
+    if (m_worker_id >= 0) {
+        sceKernelWaitThreadEnd(m_worker_id, nullptr, nullptr);
+        sceKernelDeleteThread(m_worker_id);
+        m_worker_id = -1;
+    }
+#endif
     save_storage();
+}
+
+bool Session::tick() {
+    HttpResponse response;
+    std::string url;
+    {
+        std::lock_guard<std::mutex> lock(m_worker_mutex);
+        if (!m_pending_ready) return false;
+        response = std::move(m_pending_response);
+        url = std::move(m_pending_url);
+        m_pending_ready = false;
+    }
+
+    if (url != m_current_url) {
+        if (m_has_queued_request) {
+            const std::string queued = m_queued_url;
+            m_has_queued_request = false;
+            fetch_into_current(queued);
+        }
+        return false;
+    }
+
+    if (response.ok) {
+        m_state = LoadState::Ready;
+        m_search_results.clear();
+        m_search_query.clear();
+        m_view = ViewMode::Page;
+
+        if (is_search_url(m_current_url)) {
+            m_search_query = extract_search_query(m_current_url);
+            m_search_results = parse_search_results(response.body);
+            if (!m_search_results.empty()) {
+                m_view = ViewMode::SearchResults;
+                m_title = m_search_query.empty() ? "Search results" : "Search: " + m_search_query;
+                m_status = "Search results: " + std::to_string(m_search_results.size());
+            } else {
+                m_title = extract_title(response.body);
+                m_page_lines = parse_lines(response.body);
+                m_status = "Loaded: HTTP " + std::to_string(response.status_code);
+            }
+        } else {
+            m_title = extract_title(response.body);
+            m_page_lines = parse_lines(response.body);
+            m_status = "Loaded: HTTP " + std::to_string(response.status_code);
+        }
+    } else {
+        m_state = LoadState::Error;
+        m_search_results.clear();
+        m_search_query.clear();
+        m_view = ViewMode::Page;
+        m_title = response.cert_error ? "Certificate error" : "Load error";
+        m_page_lines = {
+            "Unable to load page.",
+            "",
+            response.error.empty() ? "Unknown network error" : response.error,
+            "",
+            response.cert_error ? "Check system date/cert trust and try another site."
+                                : "Press Circle for back or Square to edit URL.",
+        };
+        m_status = "Error: " + (response.error.empty() ? std::string("network failure") : response.error);
+    }
+
+    if (m_has_queued_request) {
+        const std::string queued = m_queued_url;
+        m_has_queued_request = false;
+        fetch_into_current(queued);
+    }
+
+#ifdef __vita__
+    if (!m_worker_running.load() && m_worker_id >= 0) {
+        sceKernelWaitThreadEnd(m_worker_id, nullptr, nullptr);
+        sceKernelDeleteThread(m_worker_id);
+        m_worker_id = -1;
+    }
+#endif
+
+    return true;
 }
 
 bool Session::navigate(const std::string& url) {
@@ -119,6 +312,9 @@ const std::string& Session::status_message() const { return m_status; }
 LoadState Session::load_state() const { return m_state; }
 const std::vector<std::string>& Session::page_lines() const { return m_page_lines; }
 const std::vector<std::string>& Session::bookmarks() const { return m_bookmarks; }
+const std::vector<Session::SearchResult>& Session::search_results() const { return m_search_results; }
+const std::string& Session::search_query() const { return m_search_query; }
+bool Session::showing_search_results() const { return m_view == ViewMode::SearchResults; }
 
 bool Session::can_go_back() const {
     return !m_history.empty() && m_history_index > 0;
@@ -131,28 +327,12 @@ bool Session::can_go_forward() const {
 bool Session::fetch_into_current(const std::string& url) {
     m_state = LoadState::Loading;
     m_status = "Loading " + url;
-
-    HttpResponse resp = m_http.get(url, 8000, MAX_PAGE_BYTES);
-    if (!resp.ok) {
-        m_state = LoadState::Error;
-        m_title = resp.cert_error ? "Certificate error" : "Load error";
-        m_page_lines = {
-            "Unable to load page.",
-            "",
-            resp.error.empty() ? "Unknown network error" : resp.error,
-            "",
-            resp.cert_error ? "Check system date/cert trust and try another site."
-                            : "Press Circle for back or Select to edit URL.",
-        };
-        m_status = "Error: " + (resp.error.empty() ? std::string("network failure") : resp.error);
-        return false;
-    }
-
-    m_state = LoadState::Ready;
-    m_title = extract_title(resp.body);
-    m_page_lines = parse_lines(resp.body);
-    m_status = "Loaded: HTTP " + std::to_string(resp.status_code);
-    return true;
+    m_title = "Loading...";
+    m_page_lines = {"Loading...", "", url};
+    m_search_results.clear();
+    m_search_query.clear();
+    m_view = ViewMode::Page;
+    return start_async_load(url);
 }
 
 bool Session::push_history_and_load(const std::string& url) {
@@ -181,6 +361,7 @@ bool Session::push_history_and_load(const std::string& url) {
 void Session::load_storage() {
     m_history.clear();
     m_bookmarks.clear();
+    m_search_engine_index = 0;
 
     std::ifstream history_in(history_file());
     std::string line;
@@ -193,6 +374,18 @@ void Session::load_storage() {
     while (std::getline(bookmarks_in, line)) {
         line = trim(line);
         if (!line.empty()) append_limited(m_bookmarks, line, MAX_BOOKMARKS);
+    }
+
+    std::ifstream search_in(search_engine_file());
+    if (std::getline(search_in, line)) {
+        line = trim(line);
+        if (!line.empty()) {
+            try {
+                m_search_engine_index = clamp_engine_index(std::stoi(line));
+            } catch (...) {
+                m_search_engine_index = 0;
+            }
+        }
     }
 }
 
@@ -223,6 +416,11 @@ void Session::save_storage() const {
             bookmarks_out << url << '\n';
         }
     }
+
+    {
+        std::ofstream search_out(search_engine_file(), std::ios::trunc);
+        search_out << m_search_engine_index << '\n';
+    }
 }
 
 std::string Session::storage_dir() const {
@@ -239,6 +437,10 @@ std::string Session::history_file() const {
 
 std::string Session::bookmarks_file() const {
     return storage_dir() + "/bookmarks.txt";
+}
+
+std::string Session::search_engine_file() const {
+    return storage_dir() + "/search_engine.txt";
 }
 
 std::vector<std::string> Session::parse_lines(const std::string& html) const {
@@ -326,10 +528,174 @@ std::string Session::normalize_url(const std::string& raw_url) const {
     std::string url = trim(raw_url);
     if (url.empty()) return {};
     if (url.find(' ') != std::string::npos) {
-        return std::string(DEFAULT_SEARCH_ENGINE) + encode_query_component(url);
+        const int idx = clamp_engine_index(m_search_engine_index);
+        return std::string(kSearchEngines[idx].query_url) + encode_query_component(url);
+    }
+    if (!starts_with_http(url) && url.find('.') == std::string::npos) {
+        const int idx = clamp_engine_index(m_search_engine_index);
+        return std::string(kSearchEngines[idx].query_url) + encode_query_component(url);
     }
     if (starts_with_http(url)) return url;
     return std::string("https://") + url;
 }
+
+bool Session::is_search_url(const std::string& url) const {
+    for (const auto& engine : kSearchEngines) {
+        if (url.rfind(engine.query_url, 0) == 0) return true;
+    }
+    return false;
+}
+
+std::string Session::extract_search_query(const std::string& url) const {
+    for (const auto& engine : kSearchEngines) {
+        if (url.rfind(engine.query_url, 0) == 0) {
+            const std::string raw = url.substr(std::strlen(engine.query_url));
+            return decode_query_component(raw);
+        }
+    }
+
+    const std::size_t qpos = url.find("?q=");
+    if (qpos == std::string::npos) return {};
+    const std::size_t start = qpos + 3;
+    const std::size_t end = url.find('&', start);
+    return decode_query_component(url.substr(start, end == std::string::npos ? end : end - start));
+}
+
+std::vector<Session::SearchResult> Session::parse_search_results(const std::string& html) const {
+    std::vector<SearchResult> results;
+    constexpr std::size_t kMaxResults = 20;
+    std::size_t pos = 0;
+
+    while (results.size() < kMaxResults) {
+        pos = html.find("<a", pos);
+        if (pos == std::string::npos) break;
+        const std::size_t tag_end = html.find('>', pos);
+        if (tag_end == std::string::npos) break;
+
+        const std::string tag = html.substr(pos, tag_end - pos + 1);
+        if (tag.find("result-link") == std::string::npos &&
+            tag.find("result__a") == std::string::npos) {
+            pos = tag_end + 1;
+            continue;
+        }
+
+        const std::size_t href_pos = tag.find("href=\"");
+        if (href_pos == std::string::npos) {
+            pos = tag_end + 1;
+            continue;
+        }
+        const std::size_t href_start = href_pos + 6;
+        const std::size_t href_end = tag.find('"', href_start);
+        if (href_end == std::string::npos) {
+            pos = tag_end + 1;
+            continue;
+        }
+        std::string href = tag.substr(href_start, href_end - href_start);
+        if (!href.empty() && href[0] == '/') {
+            href = std::string("https://duckduckgo.com") + href;
+        }
+        href = extract_ddg_redirect(href);
+
+        const std::size_t close = html.find("</a>", tag_end + 1);
+        if (close == std::string::npos) break;
+        std::string text = html.substr(tag_end + 1, close - tag_end - 1);
+        text = html_unescape(strip_tags(text));
+        text = trim(text);
+        if (!text.empty() && !href.empty()) {
+            results.push_back({text, href});
+        }
+
+        pos = close + 4;
+    }
+
+    return results;
+}
+
+int Session::search_engine_index() const {
+    return clamp_engine_index(m_search_engine_index);
+}
+
+int Session::search_engine_count() const {
+    return static_cast<int>(kSearchEngines.size());
+}
+
+const char* Session::search_engine_name() const {
+    return kSearchEngines[clamp_engine_index(m_search_engine_index)].name;
+}
+
+void Session::set_search_engine_index(int index) {
+    const int clamped = clamp_engine_index(index);
+    if (clamped == m_search_engine_index) return;
+    m_search_engine_index = clamped;
+    m_status = std::string("Search engine: ") + kSearchEngines[m_search_engine_index].name;
+    save_storage();
+}
+
+bool Session::start_async_load(const std::string& url) {
+    if (m_worker_running.load()) {
+        m_queued_url = url;
+        m_has_queued_request = true;
+        m_status = "Queued: " + url;
+        return true;
+    }
+
+#ifdef __vita__
+    if (m_worker_id >= 0) {
+        sceKernelWaitThreadEnd(m_worker_id, nullptr, nullptr);
+        sceKernelDeleteThread(m_worker_id);
+        m_worker_id = -1;
+    }
+
+    auto* job = new LoadJob{this, url};
+    SceUID tid = sceKernelCreateThread("chromium-vita-net", &Session::load_thread,
+                                       0x10000100, 0x10000, 0, 0, nullptr);
+    if (tid < 0) {
+        delete job;
+        m_state = LoadState::Error;
+        m_status = "Network thread create failed";
+        return false;
+    }
+
+    m_worker_id = tid;
+    m_worker_running.store(true);
+
+    int start_res = sceKernelStartThread(tid, sizeof(LoadJob*), &job);
+    if (start_res < 0) {
+        delete job;
+        m_worker_running.store(false);
+        m_worker_id = -1;
+        m_state = LoadState::Error;
+        m_status = "Network thread start failed";
+        return false;
+    }
+
+    return true;
+#else
+    HttpResponse resp = m_http.get(url, 8000, MAX_PAGE_BYTES);
+    on_load_complete(url, std::move(resp));
+    return true;
+#endif
+}
+
+void Session::on_load_complete(const std::string& url, HttpResponse response) {
+    {
+        std::lock_guard<std::mutex> lock(m_worker_mutex);
+        m_pending_url = url;
+        m_pending_response = std::move(response);
+        m_pending_ready = true;
+    }
+    m_worker_running.store(false);
+}
+
+#ifdef __vita__
+int Session::load_thread(SceSize, void* argv) {
+    auto* job = *static_cast<LoadJob**>(argv);
+    HttpClient http;
+    HttpResponse resp = http.get(job->url, 8000, MAX_PAGE_BYTES);
+    job->session->on_load_complete(job->url, std::move(resp));
+    delete job;
+    return 0;
+}
+#endif
 
 } // namespace browser

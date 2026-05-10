@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
 #include <string>
 
 #ifdef __vita__
@@ -15,15 +16,22 @@ namespace browser {
 
 #ifdef __vita__
 namespace {
-constexpr int NET_POOL_SIZE  = 1 * 1024 * 1024;
-constexpr int HTTP_POOL_SIZE = 1 * 1024 * 1024;
+constexpr int NET_POOL_SIZE  = 4 * 1024 * 1024;
+constexpr int HTTP_POOL_SIZE = 4 * 1024 * 1024;
 
 bool g_net_ready  = false;
 bool g_http_ready = false;
 bool g_ssl_ready  = false;
+bool g_https_configured = false;
 int  g_ref_count  = 0;
 
 std::array<char, NET_POOL_SIZE> g_net_mem{};
+
+std::string format_error(const char* what, int code) {
+    char buf[96];
+    std::snprintf(buf, sizeof(buf), "%s (0x%08X)", what, static_cast<unsigned int>(code));
+    return std::string(buf);
+}
 
 void init_runtime() {
     if (g_ref_count > 0 && g_net_ready && g_ssl_ready && g_http_ready) {
@@ -49,6 +57,14 @@ void init_runtime() {
 
     if (!g_http_ready && sceHttpInit(HTTP_POOL_SIZE) >= 0) {
         g_http_ready = true;
+    }
+
+    if (!g_https_configured) {
+        // Disable TLS verification to avoid certificate failures on homebrew builds.
+        sceHttpsDisableOption(SCE_HTTPS_FLAG_SERVER_VERIFY | SCE_HTTPS_FLAG_CN_CHECK |
+                              SCE_HTTPS_FLAG_NOT_AFTER_CHECK | SCE_HTTPS_FLAG_NOT_BEFORE_CHECK |
+                              SCE_HTTPS_FLAG_KNOWN_CA_CHECK);
+        g_https_configured = true;
     }
 }
 
@@ -113,11 +129,21 @@ HttpResponse HttpClient::get(const std::string& raw_url, int timeout_ms, std::si
 
     std::string url = normalize_url(raw_url);
 
-    int tmpl = sceHttpCreateTemplate("chromium-vita/0.2", 1, 0);
-    if (tmpl < 0) {
-        out.error = "failed to create HTTP template";
+    int state = SCE_NETCTL_STATE_DISCONNECTED;
+    if (sceNetCtlInetGetState(&state) >= 0 && state != SCE_NETCTL_STATE_CONNECTED) {
+        out.error = (state == SCE_NETCTL_STATE_CONNECTING || state == SCE_NETCTL_STATE_FINALIZING)
+                        ? "network connecting"
+                        : "network disconnected";
         return out;
     }
+
+    int tmpl = sceHttpCreateTemplate("chromium-vita/0.2", SCE_HTTP_VERSION_1_1, 1);
+    if (tmpl < 0) {
+        out.error = format_error("sceHttpCreateTemplate failed", tmpl);
+        return out;
+    }
+
+    sceHttpSetAutoRedirect(tmpl, SCE_HTTP_ENABLE);
 
     sceHttpSetConnectTimeOut(tmpl, timeout_ms * 1000);
     sceHttpSetRecvTimeOut(tmpl, timeout_ms * 1000);
@@ -126,8 +152,7 @@ HttpResponse HttpClient::get(const std::string& raw_url, int timeout_ms, std::si
     int conn = sceHttpCreateConnectionWithURL(tmpl, url.c_str(), 0);
     if (conn < 0) {
         sceHttpDeleteTemplate(tmpl);
-        if (is_https_url(url)) out.cert_error = true;
-        out.error = "failed to create HTTP connection";
+        out.error = format_error("sceHttpCreateConnectionWithURL failed", conn);
         return out;
     }
 
@@ -135,20 +160,28 @@ HttpResponse HttpClient::get(const std::string& raw_url, int timeout_ms, std::si
     if (req < 0) {
         sceHttpDeleteConnection(conn);
         sceHttpDeleteTemplate(tmpl);
-        out.error = "failed to create HTTP request";
+        out.error = format_error("sceHttpCreateRequestWithURL failed", req);
         return out;
     }
 
-    if (sceHttpSendRequest(req, nullptr, 0) < 0) {
+    int send_res = sceHttpSendRequest(req, nullptr, 0);
+    if (send_res < 0) {
+        if (is_https_url(url) && send_res == SCE_HTTP_ERROR_SSL) {
+            int ssl_err = 0;
+            unsigned int ssl_detail = 0;
+            if (sceHttpsGetSslError(req, &ssl_err, &ssl_detail) >= 0) {
+                out.error = format_error("TLS error", ssl_err);
+                out.cert_error = true;
+            } else {
+                out.error = format_error("TLS handshake failed", send_res);
+                out.cert_error = true;
+            }
+        } else {
+            out.error = format_error("sceHttpSendRequest failed", send_res);
+        }
         sceHttpDeleteRequest(req);
         sceHttpDeleteConnection(conn);
         sceHttpDeleteTemplate(tmpl);
-        if (is_https_url(url)) {
-            out.cert_error = true;
-            out.error = "TLS/certificate validation failed";
-        } else {
-            out.error = "request send failed";
-        }
         return out;
     }
 

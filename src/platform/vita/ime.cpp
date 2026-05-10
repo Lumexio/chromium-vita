@@ -7,12 +7,13 @@
 #include <psp2/common_dialog.h>
 #include <psp2/ime_dialog.h>
 #include <psp2/kernel/threadmgr.h>
+#include <vita2d.h>
 #endif
 
 namespace platform::vita {
 
 namespace {
-constexpr std::size_t MAX_TEXT = 255;
+constexpr std::size_t MAX_TEXT = Ime::kMaxText;
 constexpr char32_t REPLACEMENT_CHAR = 0xFFFD;
 
 static void append_utf8(std::string& out, char32_t code_point) {
@@ -148,20 +149,57 @@ static std::string to_utf8(const char16_t* in) {
 }
 } // namespace
 
-bool Ime::prompt_url(const std::string& title, const std::string& initial_text, std::string& out_text) const {
+bool Ime::prompt_url(const std::string& title, const std::string& initial_text, std::string& out_text) {
 #ifdef __vita__
-    std::u16string title16 = to_utf16(title);
-    if (title16.size() > MAX_TEXT) {
-        title16.resize(MAX_TEXT);
+    bool accepted = false;
+    bool finished = false;
+    std::string current = initial_text;
+
+    if (!begin_url(title, initial_text)) {
+        return false;
     }
 
-    std::u16string initial16 = to_utf16(initial_text);
-    if (initial16.size() > MAX_TEXT) {
-        initial16.resize(MAX_TEXT);
+    while (active()) {
+        vita2d_start_drawing();
+        vita2d_clear_screen();
+        vita2d_end_drawing();
+        vita2d_common_dialog_update();
+        vita2d_swap_buffers();
+
+        update_url(current, accepted, finished);
+        // Yield ~1 frame to avoid busy-waiting while the dialog is active.
+        sceKernelDelayThread(16 * 1000);
     }
 
-    std::array<char16_t, MAX_TEXT + 1> buffer{};
-    std::copy(initial16.begin(), initial16.end(), buffer.begin());
+    if (accepted && !current.empty()) {
+        out_text = current;
+        return true;
+    }
+    return false;
+#else
+    (void)title;
+    (void)initial_text;
+    (void)out_text;
+    return false;
+#endif
+}
+
+bool Ime::begin_url(const std::string& title, const std::string& initial_text) {
+#ifdef __vita__
+    if (m_active) return false;
+
+    m_title16 = to_utf16(title);
+    if (m_title16.size() > MAX_TEXT) {
+        m_title16.resize(MAX_TEXT);
+    }
+
+    m_initial16 = to_utf16(initial_text);
+    if (m_initial16.size() > MAX_TEXT) {
+        m_initial16.resize(MAX_TEXT);
+    }
+
+    m_buffer.fill(0);
+    std::copy(m_initial16.begin(), m_initial16.end(), m_buffer.begin());
 
     SceImeDialogParam param{};
     sceImeDialogParamInit(&param);
@@ -169,37 +207,126 @@ bool Ime::prompt_url(const std::string& title, const std::string& initial_text, 
     param.languagesForced = 1;
     param.type = SCE_IME_TYPE_URL;
     param.option = 0;
-    param.title = reinterpret_cast<const SceWChar16*>(title16.c_str());
-    param.initialText = reinterpret_cast<SceWChar16*>(const_cast<char16_t*>(initial16.c_str()));
+    param.title = reinterpret_cast<const SceWChar16*>(m_title16.c_str());
+    param.initialText = reinterpret_cast<SceWChar16*>(const_cast<char16_t*>(m_initial16.c_str()));
     param.maxTextLength = MAX_TEXT;
-    param.inputTextBuffer = reinterpret_cast<SceWChar16*>(buffer.data());
+    param.inputTextBuffer = reinterpret_cast<SceWChar16*>(m_buffer.data());
 
-    if (sceImeDialogInit(&param) < 0) {
+    const int init_res = sceImeDialogInit(&param);
+    m_last_init = init_res;
+    if (init_res < 0) {
         return false;
     }
 
-    while (sceImeDialogGetStatus() == SCE_COMMON_DIALOG_STATUS_RUNNING) {
-        sceCommonDialogUpdate();
-        // Yield ~1 frame to avoid busy-waiting while the dialog is active.
-        sceKernelDelayThread(16 * 1000);
-    }
-
-    bool accepted = false;
-    if (sceImeDialogGetStatus() == SCE_COMMON_DIALOG_STATUS_FINISHED) {
-        SceImeDialogResult result{};
-        if (sceImeDialogGetResult(&result) >= 0 && result.button == SCE_IME_DIALOG_BUTTON_ENTER) {
-            buffer[MAX_TEXT] = 0;
-            out_text = to_utf8(buffer.data());
-            accepted = !out_text.empty();
-        }
-    }
-
-    sceImeDialogTerm();
-    return accepted;
+    m_active = true;
+    m_cancel_requested = false;
+    m_seen_running = false;
+    m_idle_frames = 0;
+    m_last_status = SCE_COMMON_DIALOG_STATUS_NONE;
+    return true;
 #else
     (void)title;
     (void)initial_text;
+    return false;
+#endif
+}
+
+bool Ime::update_url(std::string& out_text, bool& accepted, bool& finished) {
+    accepted = false;
+    finished = false;
+#ifdef __vita__
+    if (!m_active) return false;
+
+    m_buffer[MAX_TEXT] = 0;
+    out_text = to_utf8(m_buffer.data());
+
+    const auto status = sceImeDialogGetStatus();
+    m_last_status = static_cast<int>(status);
+    if (status == SCE_COMMON_DIALOG_STATUS_RUNNING) {
+        m_seen_running = true;
+        m_idle_frames = 0;
+    } else if (!m_seen_running && status == SCE_COMMON_DIALOG_STATUS_NONE) {
+        ++m_idle_frames;
+    }
+
+    if (status == SCE_COMMON_DIALOG_STATUS_FINISHED) {
+        SceImeDialogResult result{};
+        if (!m_cancel_requested && sceImeDialogGetResult(&result) >= 0 &&
+            result.button == SCE_IME_DIALOG_BUTTON_ENTER) {
+            accepted = true;
+        }
+    }
+
+    if (!m_seen_running && m_idle_frames > 120) {
+        sceImeDialogTerm();
+        m_active = false;
+        m_cancel_requested = false;
+        m_seen_running = false;
+        m_idle_frames = 0;
+        finished = true;
+        return true;
+    }
+
+    if (status != SCE_COMMON_DIALOG_STATUS_RUNNING && (m_seen_running || m_cancel_requested)) {
+        sceImeDialogTerm();
+        m_active = false;
+        m_cancel_requested = false;
+        m_seen_running = false;
+        m_idle_frames = 0;
+        finished = true;
+    }
+
+    return true;
+#else
     (void)out_text;
+    return false;
+#endif
+}
+
+void Ime::cancel() {
+#ifdef __vita__
+    if (!m_active) return;
+    m_cancel_requested = true;
+    sceImeDialogAbort();
+#endif
+}
+
+bool Ime::active() const {
+#ifdef __vita__
+    return m_active;
+#else
+    return false;
+#endif
+}
+
+int Ime::last_init_result() const {
+#ifdef __vita__
+    return m_last_init;
+#else
+    return 0;
+#endif
+}
+
+int Ime::last_status() const {
+#ifdef __vita__
+    return m_last_status;
+#else
+    return 0;
+#endif
+}
+
+int Ime::idle_frames() const {
+#ifdef __vita__
+    return m_idle_frames;
+#else
+    return 0;
+#endif
+}
+
+bool Ime::seen_running() const {
+#ifdef __vita__
+    return m_seen_running;
+#else
     return false;
 #endif
 }
