@@ -10,7 +10,7 @@
 #ifdef __vita__
 #include <psp2/io/dirent.h>
 #include <psp2/io/fcntl.h>
-#include <psp2kern/kernel/iofilemgr.h> // add this
+#include <psp2/io/stat.h>
 #endif
 
 namespace browser {
@@ -198,6 +198,7 @@ void Session::load_storage() {
 
 void Session::save_storage() const {
 #ifdef __vita__
+    
     sceIoMkdir(storage_dir().c_str(), 0777);
 #else
     std::error_code ec;
