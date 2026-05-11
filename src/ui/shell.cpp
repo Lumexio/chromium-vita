@@ -116,6 +116,7 @@ void Shell::init() {
     sync_netsurf_document();
     m_focus = Focus::Viewport;
     m_scroll_line = 0;
+    m_result_index = 0;
     m_menu_open = false;
     m_menu_status.clear();
     m_menu_engine_index = m_session.search_engine_index();
@@ -310,6 +311,10 @@ void Shell::handle_input(const platform::vita::Input& input) {
         update_ime();
         if (m_session.tick()) {
             sync_netsurf_document();
+            if (m_session.showing_search_results()) {
+                m_result_index = 0;
+                m_scroll_line = 0;
+            }
         }
         return;
     }
@@ -333,6 +338,10 @@ void Shell::handle_input(const platform::vita::Input& input) {
         }
         if (m_session.tick()) {
             sync_netsurf_document();
+            if (m_session.showing_search_results()) {
+                m_result_index = 0;
+                m_scroll_line = 0;
+            }
         }
         return;
     }
@@ -349,7 +358,18 @@ void Shell::handle_input(const platform::vita::Input& input) {
     }
 
     if (input.pressed(platform::vita::Button::Cross)) {
-        activate_focus();
+        if (m_focus == Focus::Viewport && m_session.showing_search_results()) {
+            const auto& results = m_session.search_results();
+            if (!results.empty()) {
+                const int max_idx = static_cast<int>(results.size() - 1);
+                const int idx = std::clamp(m_result_index, 0, max_idx);
+                m_session.navigate(results[idx].url);
+                m_scroll_line = 0;
+                sync_netsurf_document();
+            }
+        } else {
+            activate_focus();
+        }
     }
 
     if (input.pressed(platform::vita::Button::Square)) {
@@ -375,14 +395,34 @@ void Shell::handle_input(const platform::vita::Input& input) {
     }
 
     if (m_focus == Focus::Viewport) {
-        if (input.held(platform::vita::Button::Up)) {
-            m_scroll_line = std::max(0, m_scroll_line - 1);
-        }
-        if (input.held(platform::vita::Button::Down)) {
-            m_scroll_line += 1;
-        }
-        if (std::fabs(ly) > STICK_DEADZONE) {
-            m_scroll_line = std::max(0, m_scroll_line + static_cast<int>(ly * STICK_SCROLL_SPEED));
+        if (m_session.showing_search_results()) {
+            const int count = static_cast<int>(m_session.search_results().size());
+            if (count > 0) {
+                if (input.pressed(platform::vita::Button::Up)) {
+                    m_result_index = std::max(0, m_result_index - 1);
+                }
+                if (input.pressed(platform::vita::Button::Down)) {
+                    m_result_index = std::min(count - 1, m_result_index + 1);
+                }
+
+                const int visible_lines = (VIEW_H - VIEW_PADDING_TOP) / VIEW_LINE_HEIGHT;
+                const int selected_line = 1 + m_result_index * 2;
+                if (selected_line < m_scroll_line) {
+                    m_scroll_line = selected_line;
+                } else if (selected_line >= m_scroll_line + visible_lines) {
+                    m_scroll_line = selected_line - visible_lines + 1;
+                }
+            }
+        } else {
+            if (input.held(platform::vita::Button::Up)) {
+                m_scroll_line = std::max(0, m_scroll_line - 1);
+            }
+            if (input.held(platform::vita::Button::Down)) {
+                m_scroll_line += 1;
+            }
+            if (std::fabs(ly) > STICK_DEADZONE) {
+                m_scroll_line = std::max(0, m_scroll_line + static_cast<int>(ly * STICK_SCROLL_SPEED));
+            }
         }
     } else {
         if (input.pressed(platform::vita::Button::Up)) move_focus(-1);
@@ -399,6 +439,10 @@ void Shell::handle_input(const platform::vita::Input& input) {
 
     if (m_session.tick()) {
         sync_netsurf_document();
+        if (m_session.showing_search_results()) {
+            m_result_index = 0;
+            m_scroll_line = 0;
+        }
     }
 
     const int visible_lines = (VIEW_H - VIEW_PADDING_TOP) / VIEW_LINE_HEIGHT;
@@ -482,7 +526,8 @@ void Shell::render() {
                 } else {
                     const std::string title = std::to_string(res_idx + 1) + ". " + results[res_idx].title;
                     const std::string text = fit_text(title, RESULTS_MAX_CHARS);
-                    vita2d_pgf_draw_text(m_font, 12, y, C_TEXT, 0.75f, text.c_str());
+                    const unsigned int color = (res_idx == m_result_index) ? C_FOCUS : C_TEXT;
+                    vita2d_pgf_draw_text(m_font, 12, y, color, 0.75f, text.c_str());
                 }
             }
         }

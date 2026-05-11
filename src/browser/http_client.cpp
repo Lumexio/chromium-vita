@@ -4,11 +4,13 @@
 #include <array>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 #ifdef __vita__
 #include <psp2/net/http.h>
 #include <psp2/net/net.h>
 #include <psp2/net/netctl.h>
+#include <psp2/io/fcntl.h>
 #include <psp2/libssl.h>
 #endif
 
@@ -18,12 +20,18 @@ namespace browser {
 namespace {
 constexpr int NET_POOL_SIZE  = 4 * 1024 * 1024;
 constexpr int HTTP_POOL_SIZE = 4 * 1024 * 1024;
+constexpr const char* CA_BUNDLE_PATH = "ux0:data/chromium-vita/ca-bundle.der";
 
 bool g_net_ready  = false;
 bool g_http_ready = false;
 bool g_ssl_ready  = false;
 bool g_https_configured = false;
+bool g_ca_ready = false;
+bool g_ca_loaded = false;
 int  g_ref_count  = 0;
+
+std::vector<char> g_ca_bundle;
+std::string g_https_error;
 
 std::array<char, NET_POOL_SIZE> g_net_mem{};
 
@@ -31,6 +39,47 @@ std::string format_error(const char* what, int code) {
     char buf[96];
     std::snprintf(buf, sizeof(buf), "%s (0x%08X)", what, static_cast<unsigned int>(code));
     return std::string(buf);
+}
+
+bool load_ca_bundle_from_file() {
+    SceUID fd = sceIoOpen(CA_BUNDLE_PATH, SCE_O_RDONLY, 0);
+    if (fd < 0) return false;
+
+    const SceOff size = sceIoLseek(fd, 0, SCE_SEEK_END);
+    if (size <= 0) {
+        sceIoClose(fd);
+        return false;
+    }
+
+    sceIoLseek(fd, 0, SCE_SEEK_SET);
+    g_ca_bundle.assign(static_cast<std::size_t>(size), 0);
+    const int read_bytes = sceIoRead(fd, g_ca_bundle.data(), static_cast<unsigned int>(size));
+    sceIoClose(fd);
+
+    if (read_bytes != static_cast<int>(size)) {
+        g_ca_bundle.clear();
+        return false;
+    }
+
+    SceHttpsData ca_data{g_ca_bundle.data(), static_cast<unsigned int>(g_ca_bundle.size())};
+    const SceHttpsData* ca_list[] = {&ca_data};
+    const int res = sceHttpsLoadCert(1, ca_list, nullptr, nullptr);
+    if (res < 0) {
+        g_ca_bundle.clear();
+        return false;
+    }
+
+    g_ca_loaded = true;
+    return true;
+}
+
+bool detect_system_ca_list() {
+    SceHttpsCaList list{};
+    const int res = sceHttpsGetCaList(&list);
+    if (res < 0) return false;
+    const bool has_ca = (list.caNum > 0 && list.caCerts != nullptr);
+    sceHttpsFreeCaList(&list);
+    return has_ca;
 }
 
 void init_runtime() {
@@ -60,16 +109,34 @@ void init_runtime() {
     }
 
     if (!g_https_configured) {
-        // Disable TLS verification to avoid certificate failures on homebrew builds.
-        sceHttpsDisableOption(SCE_HTTPS_FLAG_SERVER_VERIFY | SCE_HTTPS_FLAG_CN_CHECK |
-                              SCE_HTTPS_FLAG_NOT_AFTER_CHECK | SCE_HTTPS_FLAG_NOT_BEFORE_CHECK |
-                              SCE_HTTPS_FLAG_KNOWN_CA_CHECK);
+        g_ca_ready = detect_system_ca_list();
+        if (!g_ca_ready) {
+            g_ca_ready = load_ca_bundle_from_file();
+            if (!g_ca_ready) {
+                g_https_error = "TLS CA bundle missing. Install " + std::string(CA_BUNDLE_PATH);
+            }
+        }
+
+        if (g_ca_ready) {
+            sceHttpsEnableOption(SCE_HTTPS_FLAG_SERVER_VERIFY | SCE_HTTPS_FLAG_CN_CHECK |
+                                 SCE_HTTPS_FLAG_NOT_AFTER_CHECK | SCE_HTTPS_FLAG_NOT_BEFORE_CHECK |
+                                 SCE_HTTPS_FLAG_KNOWN_CA_CHECK);
+        }
         g_https_configured = true;
     }
 }
 
 void term_runtime() {
     if (--g_ref_count > 0) return;
+
+    if (g_ca_loaded) {
+        sceHttpsUnloadCert();
+        g_ca_loaded = false;
+        g_ca_bundle.clear();
+    }
+    g_ca_ready = false;
+    g_https_configured = false;
+    g_https_error.clear();
 
     if (g_http_ready) {
         sceHttpTerm();
@@ -129,6 +196,12 @@ HttpResponse HttpClient::get(const std::string& raw_url, int timeout_ms, std::si
 
     std::string url = normalize_url(raw_url);
 
+    if (is_https_url(url) && !g_ca_ready) {
+        out.error = g_https_error.empty() ? "TLS CA list unavailable" : g_https_error;
+        out.cert_error = true;
+        return out;
+    }
+
     int state = SCE_NETCTL_STATE_DISCONNECTED;
     if (sceNetCtlInetGetState(&state) >= 0 && state != SCE_NETCTL_STATE_CONNECTED) {
         out.error = (state == SCE_NETCTL_STATE_CONNECTING || state == SCE_NETCTL_STATE_FINALIZING)
@@ -170,7 +243,11 @@ HttpResponse HttpClient::get(const std::string& raw_url, int timeout_ms, std::si
             int ssl_err = 0;
             unsigned int ssl_detail = 0;
             if (sceHttpsGetSslError(req, &ssl_err, &ssl_detail) >= 0) {
-                out.error = format_error("TLS error", ssl_err);
+                if (ssl_err == SCE_SSL_ERROR_INVALID_VALUE) {
+                    out.error = "TLS handshake failed (possible TLS version mismatch)";
+                } else {
+                    out.error = format_error("TLS error", ssl_err);
+                }
                 out.cert_error = true;
             } else {
                 out.error = format_error("TLS handshake failed", send_res);

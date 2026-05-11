@@ -22,10 +22,12 @@ int main() {
 #if defined(SCE_SYSMODULE_NETCTL)
     sceSysmoduleLoadModule(SCE_SYSMODULE_NETCTL);
 #endif
+#if !defined(CHROMIUM_VITA_USE_MBEDTLS)
     sceSysmoduleLoadModule(SCE_SYSMODULE_SSL);
     sceSysmoduleLoadModule(SCE_SYSMODULE_HTTP);
 #if defined(SCE_SYSMODULE_HTTPS)
     sceSysmoduleLoadModule(SCE_SYSMODULE_HTTPS);
+#endif
 #endif
 
     SceAppUtilInitParam app_init{};
@@ -69,10 +71,12 @@ int main() {
     vita2d_fini();
 
 #ifdef __vita__
+#if !defined(CHROMIUM_VITA_USE_MBEDTLS)
     sceSysmoduleUnloadModule(SCE_SYSMODULE_HTTP);
     sceSysmoduleUnloadModule(SCE_SYSMODULE_SSL);
 #if defined(SCE_SYSMODULE_HTTPS)
     sceSysmoduleUnloadModule(SCE_SYSMODULE_HTTPS);
+#endif
 #endif
 #if defined(SCE_SYSMODULE_NETCTL)
     sceSysmoduleUnloadModule(SCE_SYSMODULE_NETCTL);

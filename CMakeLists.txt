@@ -19,6 +19,31 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CHROMIUM_VITA_NETSURF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/netsurf" CACHE PATH
     "Path to NetSurf source/scaffolding directory")
+option(CHROMIUM_VITA_USE_MBEDTLS "Use mbedTLS for HTTP/HTTPS over sockets" ON)
+set(CHROMIUM_VITA_MBEDTLS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/mbedtls" CACHE PATH
+    "Path to mbedTLS source directory")
+
+set(CHROMIUM_VITA_HTTP_CLIENT_SRC src/browser/http_client.cpp)
+set(CHROMIUM_VITA_MBEDTLS_FOUND OFF)
+set(CHROMIUM_VITA_MBEDTLS_PORT_SRC "")
+
+if (CHROMIUM_VITA_USE_MBEDTLS)
+  if (EXISTS "${CHROMIUM_VITA_MBEDTLS_DIR}/CMakeLists.txt")
+    set(MBEDTLS_USER_CONFIG_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/vita/mbedtls_user_config.h"
+      CACHE FILEPATH "Mbed TLS user config file" FORCE)
+    set(TF_PSA_CRYPTO_USER_CONFIG_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/vita/tf_psa_user_config.h"
+      CACHE FILEPATH "TF-PSA-Crypto user config file" FORCE)
+    set(ENABLE_PROGRAMS OFF CACHE BOOL "Disable Mbed TLS/TF-PSA programs" FORCE)
+    set(ENABLE_TESTING OFF CACHE BOOL "Disable Mbed TLS/TF-PSA tests" FORCE)
+    add_subdirectory(${CHROMIUM_VITA_MBEDTLS_DIR} mbedtls_build)
+    set(CHROMIUM_VITA_HTTP_CLIENT_SRC src/browser/http_client_mbedtls.cpp)
+    set(CHROMIUM_VITA_MBEDTLS_PORT_SRC src/platform/vita/mbedtls_port.c)
+    set(CHROMIUM_VITA_MBEDTLS_FOUND ON)
+  else()
+    message(WARNING "mbedTLS not found in ${CHROMIUM_VITA_MBEDTLS_DIR}. Falling back to SceHttp backend.")
+    set(CHROMIUM_VITA_USE_MBEDTLS OFF)
+  endif()
+endif()
 
 # Size-optimised release build
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -36,7 +61,8 @@ target_include_directories(netsurf_scaffold PUBLIC
 
 add_executable(${PROJECT_NAME}
   src/main.cpp
-  src/browser/http_client.cpp
+  ${CHROMIUM_VITA_HTTP_CLIENT_SRC}
+  ${CHROMIUM_VITA_MBEDTLS_PORT_SRC}
   src/browser/session.cpp
   src/platform/vita/display.cpp
   src/platform/vita/ime.cpp
@@ -74,6 +100,16 @@ target_link_libraries(${PROJECT_NAME}
   c
   netsurf_scaffold
 )
+
+if (CHROMIUM_VITA_MBEDTLS_FOUND)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE CHROMIUM_VITA_USE_MBEDTLS=1)
+  target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CHROMIUM_VITA_MBEDTLS_DIR}/include
+    ${CHROMIUM_VITA_MBEDTLS_DIR}/tf-psa-crypto/include
+  )
+  target_link_libraries(${PROJECT_NAME} mbedtls mbedx509)
+  target_link_libraries(${PROJECT_NAME} SceLibKernel_stub)
+endif()
 
 vita_create_self(${PROJECT_NAME}.self ${PROJECT_NAME} UNSAFE)
 

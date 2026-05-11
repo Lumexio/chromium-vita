@@ -51,6 +51,7 @@ private:
     platform::vita::NetSurfFrontend m_netsurf;
 
     int  m_scroll_line{0};
+    int  m_result_index{0};
     bool m_should_exit{false};
     bool m_menu_open{false};
     bool m_netsurf_ready{false};

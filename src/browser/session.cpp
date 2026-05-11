@@ -28,7 +28,7 @@ struct SearchEngine {
 };
 
 constexpr std::array<SearchEngine, 3> kSearchEngines = {
-    SearchEngine{"DuckDuckGo", "https://duckduckgo.com/html/?q="},
+    SearchEngine{"DuckDuckGo", "http://api.duckduckgo.com/?format=json&no_redirect=1&no_html=1&q="},
     SearchEngine{"Google", "https://www.google.com/search?gbv=1&q="},
     SearchEngine{"Bing", "https://www.bing.com/search?q="},
 };
@@ -156,6 +156,105 @@ std::string html_unescape(const std::string& input) {
     }
 
     return out;
+}
+
+bool json_string_at(const std::string& json, std::size_t quote_pos, std::string* out, std::size_t* end_pos) {
+    if (quote_pos == std::string::npos || quote_pos >= json.size() || json[quote_pos] != '"') return false;
+    out->clear();
+    for (std::size_t i = quote_pos + 1; i < json.size(); ++i) {
+        char ch = json[i];
+        if (ch == '"') {
+            *end_pos = i + 1;
+            return true;
+        }
+        if (ch == '\\' && i + 1 < json.size()) {
+            const char esc = json[++i];
+            switch (esc) {
+                case '"': out->push_back('"'); break;
+                case '\\': out->push_back('\\'); break;
+                case '/': out->push_back('/'); break;
+                case 'b': out->push_back('\b'); break;
+                case 'f': out->push_back('\f'); break;
+                case 'n': out->push_back('\n'); break;
+                case 'r': out->push_back('\r'); break;
+                case 't': out->push_back('\t'); break;
+                case 'u': {
+                    if (i + 4 >= json.size()) break;
+                    int value = 0;
+                    for (int j = 0; j < 4; ++j) {
+                        const int hex = hex_value(json[i + 1 + j]);
+                        if (hex < 0) { value = -1; break; }
+                        value = (value << 4) | hex;
+                    }
+                    if (value >= 0) {
+                        if (value <= 0x7F) out->push_back(static_cast<char>(value));
+                        else out->push_back('?');
+                    }
+                    i += 4;
+                    break;
+                }
+                default:
+                    out->push_back(esc);
+                    break;
+            }
+            continue;
+        }
+        out->push_back(ch);
+    }
+    return false;
+}
+
+bool json_find_string_value(const std::string& json, const std::string& key,
+                            std::size_t* pos, std::string* out) {
+    const std::string token = "\"" + key + "\"";
+    const std::size_t key_pos = json.find(token, *pos);
+    if (key_pos == std::string::npos) return false;
+    const std::size_t colon = json.find(':', key_pos + token.size());
+    if (colon == std::string::npos) return false;
+    const std::size_t quote = json.find('"', colon + 1);
+    if (quote == std::string::npos) return false;
+    std::size_t end = 0;
+    if (!json_string_at(json, quote, out, &end)) return false;
+    *pos = end;
+    return true;
+}
+
+std::vector<Session::SearchResult> parse_ddg_json(const std::string& json) {
+    std::vector<Session::SearchResult> results;
+    constexpr std::size_t kMaxResults = 20;
+    std::size_t pos = 0;
+
+    while (results.size() < kMaxResults) {
+        const std::size_t text_pos = json.find("\"Text\"", pos);
+        if (text_pos == std::string::npos) break;
+        std::size_t scan = text_pos;
+        std::string text;
+        if (!json_find_string_value(json, "Text", &scan, &text)) {
+            pos = text_pos + 6;
+            continue;
+        }
+
+        const std::size_t url_pos = json.find("\"FirstURL\"", scan);
+        if (url_pos == std::string::npos) {
+            pos = scan;
+            continue;
+        }
+        std::size_t scan_url = url_pos;
+        std::string url;
+        if (!json_find_string_value(json, "FirstURL", &scan_url, &url)) {
+            pos = scan_url;
+            continue;
+        }
+
+        text = trim(html_unescape(text));
+        url = trim(url);
+        if (!text.empty() && !url.empty()) {
+            results.push_back({text, url});
+        }
+        pos = scan_url;
+    }
+
+    return results;
 }
 
 std::string extract_ddg_redirect(const std::string& href) {
@@ -562,6 +661,10 @@ std::string Session::extract_search_query(const std::string& url) const {
 }
 
 std::vector<Session::SearchResult> Session::parse_search_results(const std::string& html) const {
+    const std::string trimmed = trim(html);
+    if (!trimmed.empty() && trimmed.front() == '{') {
+        return parse_ddg_json(trimmed);
+    }
     std::vector<SearchResult> results;
     constexpr std::size_t kMaxResults = 20;
     std::size_t pos = 0;
